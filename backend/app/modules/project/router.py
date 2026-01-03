@@ -165,7 +165,7 @@ def get_project_board_data(
 def create_project_issue(
     project_id: int,
     release_number: str = Form(...),
-    sprint_number: str = Form(...),
+    sprint_number: str | None = Form(None),
     assignee: str = Form(...),
     reviewer: str = Form(...),
     title: str = Form(...),
@@ -184,7 +184,8 @@ def create_project_issue(
 
     # 2. Strict Role Check (ADMIN, SCRUM_MASTER, DEVELOPER, TESTER)
     user_role = auth_deps.get_current_user_role(project_id, db, current_user)
-    print(f"DEBUG: create_issue User {current_user.email} Role: {user_role} Type: {type(user_role)}")
+    display_role = user_role if user_role else "None"
+    print(f"DEBUG: create_issue User {current_user.email} (ID: {current_user.id}) Role: {display_role}")
     
     if not user_role or not auth_deps.Permissions.can_create_issue(user_role):
          raise HTTPException(
@@ -224,11 +225,13 @@ def create_project_issue(
     # 5. Create Issue with Safety Net
     try:
         db_story = story_crud.create_user_story(db, story_data, None, user_id=current_user.id)
-    except IntegrityError:
+    except IntegrityError as e:
         db.rollback()
+        # DEBUG: Expose internal error
+        print(f"DEBUG: IntegrityError: {e}")
         raise HTTPException(
             status_code=409,
-            detail="A conflict occurred while creating the issue. This might be due to a duplicate record."
+            detail=f"Database Conflict: {e.orig if hasattr(e, 'orig') else str(e)}"
         )
     except ValueError as e:
         db.rollback()

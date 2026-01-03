@@ -7,11 +7,13 @@ import StoryDetailPage from './pages/StoryDetailPage';
 import ReportsPage from './pages/ReportsPage';
 import ProjectReports from './pages/ProjectReports';
 import Login from './pages/Login';
-import Register from './pages/Register';
+import LandingPage from './pages/LandingPage';
+// import Register from './pages/Register';
 import ProfilePage from './pages/ProfilePage';
 import ProjectSettings from './pages/ProjectSettings';
 import ProjectIssuesPage from './pages/ProjectIssuesPage';
 import ProtectedRoute from './components/ProtectedRoute';
+import Signup from './pages/Signup';
 
 import { AppProvider } from './context/AppContext';
 import { ProjectProvider } from './context/ProjectContext';
@@ -28,17 +30,20 @@ import WorkspaceLayout from './components/layout/WorkspaceLayout';
 import ProjectLayout from './components/layout/ProjectLayout';
 const AppContent = () => {
     return (
+
         <Routes>
+            <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            
+            {/* <Route path="/register" element={<Register />} /> */}
+            <Route path="/signup" element={<Signup />} />
+
             {/* Protected Routes */}
             {/* Protected Routes */}
             <Route element={<ProtectedRoute />}>
-                
+
                 {/* GLOBAL WORKSPACE LAYOUT */}
                 <Route element={<WorkspaceLayout />}>
-                    <Route path="/" element={<Workspace />} />
+                    <Route path="/dashboard" element={<Workspace />} />
                     <Route path="/assigned-to-me" element={<AssignedToMePage />} />
                     <Route path="/settings" element={<GlobalSettingsPage />} />
                     {/* Fallback global routes if any */}
@@ -60,7 +65,7 @@ const AppContent = () => {
                 {/* Standalone Pages (Profile, etc) - Wrap in WorkspaceLayout or Keep Separate? */}
                 <Route element={<WorkspaceLayout />}>
                     <Route path="/profile" element={<ProfilePage />} />
-                     {/* Global Issues/Reports were requested to be REMOVED from sidebar, 
+                    {/* Global Issues/Reports were requested to be REMOVED from sidebar, 
                          but keeping routes accessible just in case, wrapped in Workspace layout 
                          so they have the global sidebar.
                       */}
@@ -77,17 +82,17 @@ const AppContent = () => {
 };
 
 function App() {
-  return (
-    <Router>
-        <AuthProvider>
-            <AppProvider>
-                <ProjectProvider>
-                    <AppContent />
-                </ProjectProvider>
-            </AppProvider>
-        </AuthProvider>
-    </Router>
-  );
+    return (
+        <Router>
+            <AuthProvider>
+                <AppProvider>
+                    <ProjectProvider>
+                        <AppContent />
+                    </ProjectProvider>
+                </AppProvider>
+            </AuthProvider>
+        </Router>
+    );
 }
 
 export default App;

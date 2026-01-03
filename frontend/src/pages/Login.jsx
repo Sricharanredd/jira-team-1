@@ -1,89 +1,272 @@
-import React, { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { useNavigate, Link } from 'react-router-dom';
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
-const Login = () => {
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    const [error, setError] = useState('');
+export default function Login() {
+    const [form, setForm] = useState({ email: "", password: "" });
     const { login } = useAuth();
     const navigate = useNavigate();
 
-    const [showPassword, setShowPassword] = useState(false);
-
     const handleSubmit = async (e) => {
         e.preventDefault();
-        setError('');
         try {
-            await login(email, password);
-            navigate('/');
+            await login(form.email, form.password);
+            navigate("/dashboard"); // Redirect to workspace on success
         } catch (err) {
-            setError('Invalid email or password');
+            console.error(err);
+            alert("Login failed: " + (err.message || "Unknown error"));
         }
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-[#F4F5F7]">
-            <div className="bg-white p-8 rounded-md shadow-sm w-[400px] border border-gray-200">
-                <h2 className="text-2xl font-medium text-[#172B4D] mb-8 text-center">Login to Jira</h2>
-                {error && <div className="bg-red-50 text-red-600 p-3 rounded mb-6 text-sm border border-red-100">{error}</div>}
-                
-                <form onSubmit={handleSubmit} className="space-y-5">
-                    <div>
-                        <label className="block text-xs font-semibold text-[#6B778C] uppercase tracking-wide mb-2">Email</label>
-                        <input 
-                            type="email" 
-                            className="block w-full border border-gray-300 rounded px-3 py-2 text-[#172B4D] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            required
-                            placeholder="Enter your email"
-                        />
+        <div style={pageContainer}>
+            {/* Header / Background Strip */}
+            <div style={blueHeader}>
+                <div style={headerContent}>
+                    <div style={logoArea}>
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" style={{ marginRight: 10 }}>
+                            <path fillRule="evenodd" clipRule="evenodd" d="M11.2 4H4V13.8C4 16.7823 6.41766 19.2 9.4 19.2C10.3941 19.2 11.2 18.3941 11.2 17.4V4ZM19.2 4H12V11.2H19.2V4ZM19.2 12H12V17.4C12 18.3941 12.8059 19.2 13.8 19.2C16.7823 19.2 19.2 16.7823 19.2 13.8V12Z" fill="white" />
+                        </svg>
+                        <span style={{ color: "white", fontWeight: "600", fontSize: "28px", letterSpacing: "-0.5px" }}>Jira Software</span>
                     </div>
-                    <div>
-                        <label className="block text-xs font-semibold text-[#6B778C] uppercase tracking-wide mb-2">Password</label>
-                        <div className="relative">
-                            <input 
-                                type={showPassword ? "text" : "password"}
-                                className="block w-full border border-gray-300 rounded px-3 py-2 pr-10 text-[#172B4D] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
+                    <div style={subHeader}>Clone </div>
+                </div>
+            </div>
+
+            <div style={contentWrapper}>
+                {/* Left Side: Marketing Info */}
+                <div style={marketingCol}>
+                    <div style={illustrationPlaceholder}>
+                        {/* Simple CSS Illustration */}
+                        <div style={{ width: 60, height: 100, background: "#0052cc", margin: "0 10px", borderRadius: 4 }}></div>
+                        <div style={{ width: 60, height: 140, background: "#2684ff", margin: "0 10px", borderRadius: 4, marginTop: -40 }}></div>
+                        <div style={{ width: 60, height: 80, background: "#00C7E6", margin: "0 10px", borderRadius: 4, alignSelf: "flex-end" }}></div>
+                    </div>
+
+                    <h3 style={marketingTitle}>Welcome back to your team</h3>
+
+                    <div style={checklist}>
+                        <div style={checkItem}>✓ Continue where you left off</div>
+                        <div style={checkItem}>✓ Check your latest tasks</div>
+                        <div style={checkItem}>✓ Collaborate in real-time</div>
+                    </div>
+                </div>
+
+                {/* Right Side: Login Card */}
+                <div style={formCard}>
+                    <h2 style={cardHeader}>Log in</h2>
+                    <p style={cardSubHeader}>Continue to Jira Software</p>
+
+                    <form onSubmit={handleSubmit} style={formStack}>
+                        <div style={fieldGroup}>
+                            <label style={label}>Email</label>
+                            <input
+                                type="email"
+                                style={input}
+                                placeholder="Enter your email"
+                                value={form.email}
+                                onChange={e => setForm({ ...form, email: e.target.value })}
                                 required
-                                placeholder="Enter your password"
                             />
-                            <button
-                                type="button"
-                                className="absolute inset-y-0 right-0 px-3 flex items-center text-gray-400 hover:text-[#172B4D] cursor-pointer transition-colors"
-                                onClick={() => setShowPassword(!showPassword)}
-                                aria-label={showPassword ? "Hide password" : "Show password"}
-                            >
-                                {showPassword ? (
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
-                                    </svg>
-                                ) : (
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                    </svg>
-                                )}
-                            </button>
                         </div>
+
+                        <div style={fieldGroup}>
+                            <label style={label}>Password</label>
+                            <input
+                                type="password"
+                                style={input}
+                                placeholder="Enter password"
+                                value={form.password}
+                                onChange={e => setForm({ ...form, password: e.target.value })}
+                                required
+                            />
+                        </div>
+
+                        <button type="submit" style={submitBtn}>Log in</button>
+                    </form>
+
+                    <div style={loginLinkContainer}>
+                        <span style={{ color: "#42526e" }}>Don't have an account? </span>
+                        <span style={link} onClick={() => navigate("/signup")}>Sign up</span>
                     </div>
-                    <button 
-                        type="submit" 
-                        className="w-full bg-[#0052CC] text-white py-2 rounded font-medium hover:bg-[#0065FF] transition-colors mt-4"
-                    >
-                        Log in
-                    </button>
-                </form>
-                <div className="mt-6 text-center text-sm">
-                    <span className="text-[#6B778C]">Don't have an account? </span>
-                    <Link to="/register" className="text-[#0052CC] hover:underline font-medium">Sign up</Link>
+
+                    <div style={noCreditCard}>SECURE LOGIN</div>
                 </div>
             </div>
         </div>
     );
+}
+
+// ----- STYLES (Reused from Signup for consistency) -----
+const pageContainer = {
+    minHeight: "100vh",
+    display: "flex",
+    flexDirection: "column",
+    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+    background: "#f4f5f7"
 };
 
-export default Login;
+const blueHeader = {
+    height: "320px",
+    background: "#0052cc",
+    clipPath: "ellipse(150% 100% at 50% 0%)",
+    display: "flex",
+    justifyContent: "center",
+    paddingTop: "60px",
+    zIndex: 1
+};
+
+const headerContent = {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center"
+};
+
+const logoArea = {
+    display: "flex",
+    alignItems: "center",
+    marginBottom: "5px"
+};
+
+const subHeader = {
+    color: "white",
+    fontSize: "18px",
+    fontWeight: "500",
+    opacity: "0.9"
+};
+
+const contentWrapper = {
+    display: "flex",
+    justifyContent: "center",
+    maxWidth: "1000px",
+    width: "100%",
+    margin: "-200px auto 40px",
+    zIndex: 2,
+    gap: "60px",
+    padding: "0 20px"
+};
+
+const marketingCol = {
+    flex: 1,
+    paddingTop: "60px",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    textAlign: "center"
+};
+
+const illustrationPlaceholder = {
+    height: "200px",
+    width: "100%",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "flex-end",
+    marginBottom: "30px"
+};
+
+const marketingTitle = {
+    fontSize: "20px",
+    fontWeight: "bold",
+    color: "#172b4d",
+    marginBottom: "20px"
+};
+
+const checklist = {
+    textAlign: "left",
+    color: "#42526e",
+    fontSize: "16px",
+    lineHeight: "2"
+};
+
+const checkItem = {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px"
+};
+
+const formCard = {
+    flex: "0 0 450px",
+    background: "white",
+    borderRadius: "3px",
+    boxShadow: "0 0 20px rgba(0,0,0,0.1)",
+    padding: "40px",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center"
+};
+
+const cardHeader = {
+    color: "#172b4d",
+    fontSize: "24px",
+    fontWeight: "bold",
+    marginBottom: "8px"
+};
+
+const cardSubHeader = {
+    color: "#5e6c84",
+    marginBottom: "30px",
+    fontSize: "14px"
+};
+
+const formStack = {
+    width: "100%",
+    display: "flex",
+    flexDirection: "column",
+    gap: "12px"
+};
+
+const fieldGroup = {
+    display: "flex",
+    flexDirection: "column",
+    gap: "4px",
+    textAlign: "left"
+};
+
+const label = {
+    fontSize: "12px",
+    color: "#6b778c",
+    fontWeight: "600"
+};
+
+const input = {
+    padding: "10px",
+    fontSize: "14px",
+    border: "2px solid #dfe1e6",
+    borderRadius: "3px",
+    outline: "none",
+    width: "100%",
+    boxSizing: "border-box",
+    transition: "border-color 0.2s"
+};
+
+const submitBtn = {
+    marginTop: "10px",
+    background: "#0052cc",
+    color: "white",
+    border: "none",
+    padding: "12px",
+    fontSize: "14px",
+    fontWeight: "bold",
+    borderRadius: "3px",
+    cursor: "pointer",
+    width: "100%"
+};
+
+const loginLinkContainer = {
+    marginTop: "20px",
+    fontSize: "14px"
+};
+
+const link = {
+    color: "#0052cc",
+    cursor: "pointer",
+    textDecoration: "none"
+};
+
+const noCreditCard = {
+    marginTop: "30px",
+    fontSize: "11px",
+    fontWeight: "bold",
+    color: "#42526e",
+    letterSpacing: "0.5px"
+};
