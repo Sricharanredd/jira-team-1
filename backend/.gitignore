@@ -1,0 +1,19 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Environment
+.env
+
+# Uploads (generated files)
+backend/uploads/
+
+# Node (future frontend)
+frontend/node_modules/
+frontend/build/
+
+# OS
+.DS_Store
+Thumbs.db

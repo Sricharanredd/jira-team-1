@@ -1,0 +1,338 @@
+from fastapi import APIRouter, Depends, HTTPException, Form, UploadFile, File
+from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
+from app.database import get_db
+from app.modules.project import crud as project_crud, schemas as project_schemas
+from app.modules.auth import dependencies as auth_deps, models as auth_models, crud as auth_crud
+from app.modules.user_story import models as story_models, schemas as story_schemas, crud as story_crud
+from typing import List
+import os
+import shutil
+
+router = APIRouter(tags=["Projects"])
+
+UPLOAD_BASE_DIR = "uploads/user_stories"
+os.makedirs(UPLOAD_BASE_DIR, exist_ok=True)
+
+# -------------------- PROJECT ENDPOINTS --------------------
+
+@router.post("/project", response_model=project_schemas.ProjectResponse)
+def create_project(
+    project_name: str = Form(...),
+    project_prefix: str = Form(...),
+    db: Session = Depends(get_db),
+    current_user: auth_models.User = Depends(auth_deps.get_current_user)
+):
+    if current_user.global_role != auth_models.GlobalRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Only Global Admins can create new projects.")
+        
+    try:
+        project_data = project_schemas.ProjectCreate(
+            project_name=project_name,
+            project_prefix=project_prefix
+        )
+        new_project = project_crud.create_project(db, project_data)
+        
+        # Assign Creator as ADMIN
+        auth_crud.assign_role(db, current_user.id, new_project.id, auth_models.RoleType.ADMIN)
+        
+        return new_project
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.get("/projects/{project_id}", response_model=project_schemas.ProjectResponse)
+def get_project(
+    project_id: int, 
+    db: Session = Depends(get_db),
+    current_user: auth_models.User = Depends(auth_deps.get_current_user)
+):
+    project = project_crud.get_project_by_id(db, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+        
+    # Check if user is a member OR Global Admin
+    if current_user.global_role != auth_models.GlobalRole.ADMIN and \
+       not auth_deps.get_current_user_role(project_id, db, current_user):
+        raise HTTPException(status_code=403, detail="Access denied")
+        
+    return project
+
+@router.get("/project", response_model=List[project_schemas.ProjectResponse])
+def get_all_projects(
+    db: Session = Depends(get_db),
+    current_user: auth_models.User = Depends(auth_deps.get_current_user)
+):
+    if current_user.global_role == auth_models.GlobalRole.ADMIN:
+        # Admin sees all projects
+        all_projects = project_crud.get_all_projects(db)
+        return [
+            project_schemas.ProjectResponse(
+                id=p.id,
+                project_name=p.project_name,
+                project_prefix=p.project_prefix,
+                increment_number=p.increment_number 
+            ) for p in all_projects
+        ]
+    
+    # Standard User: Only return projects where user is a member
+    user_projects = auth_crud.get_user_projects(db, current_user.id) 
+    
+    return [
+        project_schemas.ProjectResponse(
+            id=p['id'],
+            project_name=p['project_name'],
+            project_prefix=p['project_prefix'],
+            increment_number=0 # Data from query doesn't have it currently, minor issue
+        ) for p in user_projects
+    ]
+
+
+
+@router.delete("/projects/{project_id}")
+def delete_project(
+    project_id: int, 
+    db: Session = Depends(get_db),
+    current_user: auth_models.User = Depends(auth_deps.get_current_user)
+):
+    # Check Admin Role (Global Admin OR Project Admin)
+    role = auth_deps.get_current_user_role(project_id, db, current_user)
+    
+    is_global_admin = current_user.global_role == auth_models.GlobalRole.ADMIN
+    is_project_admin = role == auth_models.RoleType.ADMIN
+    
+    if not (is_global_admin or is_project_admin):
+        raise HTTPException(status_code=403, detail="Only Global Admins or Project Admins can delete projects")
+
+    project = project_crud.get_project_by_id(db, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+        
+    # Implement Delete Logic (TODO: Add delete to crud)
+    # For now, just simulation or simple delete
+    # db.delete(project)
+    # db.commit()
+    return {"message": "Project deleted (simulation)"} # Staying consistent with previous
+
+@router.get("/projects/{project_id}/board", tags=["Project Issues"])
+def get_project_board_data(
+    project_id: int, 
+    db: Session = Depends(get_db),
+    current_user: auth_models.User = Depends(auth_deps.get_current_user)
+):
+    # 1. Fetch Project
+    project = project_crud.get_project_by_id(db, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # 3. Check Role (Enforce Access)
+    current_role = auth_deps.get_current_user_role(project_id, db, current_user)
+    
+    # Allow Global Admin to view board even if not a member? 
+    # Usually yes.
+    if current_user.global_role != auth_models.GlobalRole.ADMIN and not current_role:
+          raise HTTPException(status_code=403, detail="You do not have access to this project")
+
+    # 2. Fetch Issues
+    issues = db.query(story_models.UserStory).filter(story_models.UserStory.project_id == project_id).all()
+
+    return {
+        "project": {
+            "id": project.id,
+            "project_name": project.project_name,
+            "project_prefix": project.project_prefix,
+            "currentUserRole": current_role.value if current_role else ("ADMIN" if current_user.global_role == auth_models.GlobalRole.ADMIN else None)
+        },
+        "issues": [
+            {
+                "id": issue.id,
+                "story_code": issue.story_code,
+                "title": issue.title,
+                "description": issue.description,
+                "status": issue.status,
+                "issue_type": issue.issue_type,
+                "assignee": issue.assignee, 
+                "project_id": issue.project_id,
+                "sprint_number": issue.sprint_number
+            }
+            for issue in issues
+        ]
+    }
+
+# -------------------- ISSUE MANAGEMENT --------------------
+
+@router.post("/projects/{project_id}/issues", response_model=story_schemas.UserStoryResponse, tags=["Project Issues"])
+def create_project_issue(
+    project_id: int,
+    release_number: str = Form(...),
+    sprint_number: str = Form(...),
+    assignee: str = Form(...),
+    reviewer: str = Form(...),
+    title: str = Form(...),
+    description: str = Form(...),
+    status: story_schemas.StoryStatus = Form(...),
+    issue_type: story_schemas.IssueType = Form(story_schemas.IssueType.story),
+    parent_issue_id: int | None = Form(None),
+    support_doc: UploadFile | None = File(None),
+    db: Session = Depends(get_db),
+    current_user: auth_models.User = Depends(auth_deps.get_current_user)
+):
+    # 1. Verify Project Exists
+    project = project_crud.get_project_by_id(db, project_id)
+    if not project:
+         raise HTTPException(status_code=404, detail="Project not found")
+
+    # 2. Strict Role Check (ADMIN, SCRUM_MASTER, DEVELOPER, TESTER)
+    user_role = auth_deps.get_current_user_role(project_id, db, current_user)
+    print(f"DEBUG: User {current_user.email} Role: {user_role} Type: {type(user_role)}")
+    
+    if not user_role or not auth_deps.Permissions.can_create_issue(user_role):
+         raise HTTPException(
+             status_code=403, 
+             detail=f"Permission denied. Role: {user_role} ({type(user_role)}) UID: {current_user.id} PID: {project_id}"
+         )
+
+    # 3. Check Business Rules (Duplicate Title)
+    existing_story = db.query(story_models.UserStory).filter(
+        story_models.UserStory.project_id == project_id,
+        story_models.UserStory.title == title
+    ).first()
+    
+    if existing_story:
+        raise HTTPException(
+            status_code=400,
+            detail="An issue with this title already exists in this project. Please choose a different title."
+        )
+
+    # 4. Prepare Data
+    try:
+        story_data = story_schemas.UserStoryCreate(
+            project_id=project_id,
+            release_number=release_number,
+            sprint_number=sprint_number,
+            assignee=assignee,
+            reviewer=reviewer,
+            title=title,
+            description=description,
+            status=status,
+            issue_type=issue_type,
+            parent_issue_id=parent_issue_id,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=str(e).replace("\n", " "))
+
+    # 5. Create Issue with Safety Net
+    try:
+        db_story = story_crud.create_user_story(db, story_data, None, user_id=current_user.id)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="A conflict occurred while creating the issue. This might be due to a duplicate record."
+        )
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Unexpected error during creation.")
+
+    # 5. Handle File Upload
+    story_folder = os.path.join(UPLOAD_BASE_DIR, str(db_story.id))
+    os.makedirs(story_folder, exist_ok=True)
+
+    if support_doc:
+        file_path = os.path.join(story_folder, support_doc.filename)
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(support_doc.file, buffer)
+
+        db_story.support_doc_path = file_path
+        db.commit()
+
+    return {
+        "id": db_story.id,
+        "project_id": db_story.project_id,
+        "project_name": db_story.project.project_name,
+        "release_number": db_story.release_number,
+        "sprint_number": db_story.sprint_number,
+        "story_code": db_story.story_code,
+        "assignee": db_story.assignee,
+        "reviewer": db_story.reviewer,
+        "title": db_story.title,
+        "description": db_story.description,
+        "status": db_story.status,
+        "issue_type": db_story.issue_type,
+        "parent_issue_id": db_story.parent_issue_id,
+        "support_doc": os.path.basename(db_story.support_doc_path) if db_story.support_doc_path else None,
+    }
+
+# -------------------- MEMBER MANAGEMENT --------------------
+
+@router.get("/projects/{project_id}/members", tags=["Members"])
+def get_project_members(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: auth_models.User = Depends(auth_deps.get_current_user)
+):
+    # Only Admin or Scrum Master can view members (Strict Enforcement)
+    role = auth_deps.get_current_user_role(project_id, db, current_user)
+    
+    # Debug Logging Requirement
+    print(f"DEBUG: get_project_members UID={current_user.id} PID={project_id} ROLE={role} ({type(role)})")
+
+    if not role or not auth_deps.Permissions.can_manage_members(role):
+         # Specific error message requested
+         raise HTTPException(
+             status_code=403, 
+             detail="You do not have permission to view project members."
+         )
+
+    members = db.query(auth_models.ProjectMember).filter(auth_models.ProjectMember.project_id == project_id).all()
+    
+    result = []
+    for m in members:
+        user = db.query(auth_models.User).filter(auth_models.User.id == m.user_id).first()
+        if user:
+            result.append({
+                "user_id": user.id,
+                "name": user.name,
+                "email": user.email,
+                "role": m.role
+            })
+    return result
+
+@router.post("/projects/{project_id}/members", tags=["Members"])
+def add_project_member(
+    project_id: int,
+    email: str = Form(...),
+    role: auth_models.RoleType = Form(...),
+    db: Session = Depends(get_db),
+    current_user: auth_models.User = Depends(auth_deps.get_current_user)
+):
+    # Only Project ADMIN or SCRUM_MASTER or Global ADMIN can add members
+    current_role = auth_deps.get_current_user_role(project_id, db, current_user)
+    print(f"DEBUG: add_project_member UID={current_user.id} PID={project_id} ROLE={current_role}")
+    
+    is_global_admin = current_user.global_role == auth_models.GlobalRole.ADMIN
+    
+    if not (is_global_admin or (current_role and auth_deps.Permissions.can_manage_members(current_role))):
+        raise HTTPException(status_code=403, detail="Only Admins or Scrum Masters can manage members")
+
+    # Find user by email
+    user_to_add = auth_crud.get_user_by_email(db, email)
+    if not user_to_add:
+        raise HTTPException(status_code=404, detail="User with this email not found")
+
+    # Check if already member
+    existing = db.query(auth_models.ProjectMember).filter(
+        auth_models.ProjectMember.project_id == project_id,
+        auth_models.ProjectMember.user_id == user_to_add.id
+    ).first()
+
+    if existing:
+        # Update Role? Or error? Let's update role.
+        existing.role = role
+        db.commit()
+    else:
+        auth_crud.assign_role(db, user_to_add.id, project_id, role)
+    
+    return {"message": "Member added/updated successfully"}
