@@ -23,8 +23,8 @@ auth_models.Base.metadata.create_all(bind=engine)
 with Session(engine) as db:
     workflow_crud.seed_workflow_transitions(db)
     
-    # Bootstrap Super Admin (SriCharan)
-    super_admin_email = "sricharanreddyk33@gmail.com"
+    # Bootstrap Super Admin (admin@admin.com)
+    super_admin_email = "admin@admin.com"
     super_admin = auth_crud.get_user_by_email(db, super_admin_email)
     
     from app.modules.auth.security import get_password_hash
@@ -32,18 +32,23 @@ with Session(engine) as db:
     if not super_admin:
         print(f"Bootstrapping Super Admin: {super_admin_email}")
         user_data = auth_models.User(
-            name="SriCharan",
+            name="admin",
             email=super_admin_email,
-            password_hash=get_password_hash("Charan@33"),
+            password_hash=get_password_hash("admin@123"),
             is_active=True,
             global_role=auth_models.GlobalRole.ADMIN
         )
         db.add(user_data)
         db.commit()
-    elif super_admin.global_role != auth_models.GlobalRole.ADMIN:
-        print(f"Promoting {super_admin_email} to Super Admin")
         super_admin.global_role = auth_models.GlobalRole.ADMIN
         db.commit()
+
+    # DEBUG: Print all user stories
+    stories = db.query(story_models.UserStory).all()
+    print("DEBUG: EXISTING STORIES START")
+    for s in stories:
+        print(f"ID: {s.id}, PID: {s.project_id}, Code: {s.story_code}, Title: {s.title}")
+    print("DEBUG: EXISTING STORIES END")
 
 app = FastAPI(
     title="User Story API",
@@ -64,7 +69,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         # Custom messages based on error type
         if error['type'] == 'type_error.integer':
             msg = f"{field} must be an integer"
-        elif error['type'] == 'value_error.missing':
+        elif error['type'] in ('value_error.missing', 'missing'):
             msg = f"{field} is required"
         elif error['type'] in ('type_error.enum', 'enum'):
             # For Status Enum
@@ -75,6 +80,9 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         
         errors.append(msg)
         
+        errors.append(msg)
+        
+    print(f"DEBUG: 422 Validation Error: {exc.errors()}") # Log FULL details
     return JSONResponse(
         status_code=422,
         content={"detail": errors[0] if len(errors) == 1 else errors},
@@ -107,6 +115,11 @@ os.makedirs(UPLOAD_BASE_DIR, exist_ok=True)
 @app.get("/", include_in_schema=False)
 def root():
     return {"message": "User Story API is running (V2)"}
+
+@app.get("/debug/stories")
+def debug_stories(db: Session = Depends(get_db)):
+    stories = db.query(story_models.UserStory).all()
+    return [{"id": s.id, "pid": s.project_id, "code": s.story_code, "title": s.title} for s in stories]
 
 
 # -------------------- PROJECT ROUTER --------------------

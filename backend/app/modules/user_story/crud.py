@@ -17,17 +17,35 @@ def generate_story_code(db: Session, project_id: int) -> str:
     if not project:
         raise ValueError("Project not found")
         
-    # Count existing stories for this project to determine next number
-    # (Atomic handling would use DB locking or sequences, but count+1 is acceptable for this scope)
-    count = db.query(models.UserStory).filter(models.UserStory.project_id == project_id).count()
-    next_num = count + 1
+    # Find the last created story to determine the next number
+    last_story = db.query(models.UserStory)\
+        .filter(models.UserStory.project_id == project_id)\
+        .order_by(models.UserStory.id.desc())\
+        .first()
+
+    if last_story and last_story.story_code:
+        try:
+            # Assumes format "PREFIX-0001"
+            last_num = int(last_story.story_code.split('-')[-1])
+            next_num = last_num + 1
+        except (ValueError, IndexError):
+            # Fallback if code format is weird
+            count = db.query(models.UserStory).filter(models.UserStory.project_id == project_id).count()
+            next_num = count + 1
+    else:
+        next_num = 1
     
-    # Use project_prefix preferred, fallback to name if empty (though schema demands prefix)
+    # Use project_prefix preferred, fallback to name if empty
     prefix = project.project_prefix if project.project_prefix else project.project_name[:2].upper()
     
     return f"{prefix}-{next_num:04d}"
 
 def create_user_story(db: Session, story: schemas.UserStoryCreate, file_path: str | None, user_id: int | None = None):
+    print(f"DEBUG: create_user_story called with user_id={user_id}")
+    if user_id is None:
+        print("WARNING: user_id is None, falling back to 1 (System Admin)")
+        user_id = 1
+        
     # 1. Generate Story Code (Centralized)
     try:
         story_code = generate_story_code(db, story.project_id)
@@ -81,7 +99,7 @@ def create_user_story(db: Session, story: schemas.UserStoryCreate, file_path: st
     db_story = models.UserStory(
         project_id=story.project_id,
         release_number=story.release_number,
-        sprint_number=story.sprint_number,
+        sprint_number=story.sprint_number if story.sprint_number else "", # Convert None to empty string
         story_code=story_code,
         assignee=story.assignee,
         reviewer=story.reviewer,

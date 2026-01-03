@@ -21,7 +21,7 @@ class IssueType(str, Enum):
 class UserStoryCreate(BaseModel):
     project_id: int = Field(..., example=1)
     release_number: str = Field(..., example="R1.0")
-    sprint_number: str = Field(..., example="Sprint-3")
+    sprint_number: Optional[str] = Field(default=None, example="Sprint-3")
     assignee: str = Field(..., example="Sanji")
     reviewer: str = Field(..., example="TeamLead")
     title: str = Field(..., example="Login API")
