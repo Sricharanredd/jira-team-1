@@ -24,6 +24,9 @@ class UserStory(Base):
     status = Column(String(50), nullable=False)
     issue_type = Column(String(20), nullable=False, default="story")
 
+    start_date = Column(DateTime(timezone=True), nullable=True)
+    end_date = Column(DateTime(timezone=True), nullable=True)
+
     support_doc_path = Column(String(255), nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -41,7 +44,7 @@ class UserStory(Base):
     # Constraints
     __table_args__ = (
         UniqueConstraint('project_id', 'story_code', name='unique_project_story_code'),
-        UniqueConstraint('project_id', 'title', name='unique_project_title'),
+        # UniqueConstraint('project_id', 'title', name='unique_project_title'), -- REMOVED to allow duplicate titles
     )
 
 

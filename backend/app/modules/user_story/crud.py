@@ -109,10 +109,12 @@ def create_user_story(db: Session, story: schemas.UserStoryCreate, file_path: st
         issue_type=story.issue_type,
         parent_issue_id=parent_id,
         support_doc_path=file_path,
+        start_date=story.start_date,
+        end_date=story.end_date,
         created_by=user_id # Save creator
     )
     db.add(db_story)
-    db.commit()
+    db.flush() # Flush to get ID, do not commit yet
     db.refresh(db_story)
     
     # Initial history log

@@ -25,11 +25,12 @@ def get_all_user_stories(
 ):
     # TODO: This should probably be administrative or removed to enforce project boundaries.
     stories = story_crud.get_all_user_stories(db, project_id)
+    print(f"DEBUG: Fetched {len(stories)} stories for project_id={project_id}")
     return [
         {
             "id": s.id,
             "project_id": s.project_id,
-            "project_name": s.project.project_name,
+            "project_name": s.project.project_name if s.project else "Unknown Project",
             "release_number": s.release_number,
             "sprint_number": s.sprint_number,
             "story_code": s.story_code,
@@ -41,6 +42,9 @@ def get_all_user_stories(
             "issue_type": s.issue_type,
             "parent_issue_id": s.parent_issue_id,
             "support_doc": os.path.basename(s.support_doc_path) if s.support_doc_path else None,
+            "start_date": s.start_date,
+            "end_date": s.end_date,
+            "created_at": s.created_at,
         }
         for s in stories
     ]
@@ -76,6 +80,9 @@ def get_user_story(
         "issue_type": story.issue_type,
         "parent_issue_id": story.parent_issue_id,
         "support_doc": os.path.basename(story.support_doc_path) if story.support_doc_path else None,
+        "start_date": story.start_date,
+        "end_date": story.end_date,
+        "created_at": story.created_at,
     }
 
 
@@ -122,7 +129,11 @@ def update_user_story_status(
             "status": updated_story.status,
             "issue_type": updated_story.issue_type,
             "parent_issue_id": updated_story.parent_issue_id,
+
             "support_doc": os.path.basename(updated_story.support_doc_path) if updated_story.support_doc_path else None,
+            "start_date": updated_story.start_date,
+            "end_date": updated_story.end_date,
+            "created_at": updated_story.created_at,
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -138,6 +149,9 @@ def update_user_story(
     assignee: str | None = Form(None),
     reviewer: str | None = Form(None),
     status: str | None = Form(None),
+    start_date: str | None = Form(None),
+    end_date: str | None = Form(None),
+    parent_issue_id: str | None = Form(None),
     user_id: int | None = Form(None), # Not used directly?
     db: Session = Depends(get_db),
     current_user: auth_models.User = Depends(auth_deps.get_current_user)
@@ -189,6 +203,17 @@ def update_user_story(
         update_data['assignee'] = assignee
     if reviewer is not None and reviewer.strip() != "":
         update_data['reviewer'] = reviewer
+    if start_date is not None and start_date.strip() != "":
+        update_data['start_date'] = start_date
+    if end_date is not None and end_date.strip() != "":
+        update_data['end_date'] = end_date
+
+    # Allow clearing parent_issue_id if it's an empty string (meaning unassign), or setting it if provided
+    if parent_issue_id is not None:
+        if parent_issue_id.strip() == "":
+            update_data['parent_issue_id'] = None
+        else:
+            update_data['parent_issue_id'] = int(parent_issue_id)
     
     # Handle status update with validation
     if status is not None and status.strip() != "":
@@ -218,6 +243,9 @@ def update_user_story(
         "issue_type": updated.issue_type,
         "parent_issue_id": updated.parent_issue_id,
         "support_doc": os.path.basename(updated.support_doc_path) if updated.support_doc_path else None,
+        "start_date": updated.start_date,
+        "end_date": updated.end_date,
+        "created_at": updated.created_at,
     }
 
 @router.get("/user-story/{id}/history", response_model=list[story_schemas.UserStoryHistoryResponse], tags=["Workflow"])

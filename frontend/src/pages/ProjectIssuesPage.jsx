@@ -3,7 +3,6 @@ import { useParams } from 'react-router-dom';
 import api from '../api/api';
 import { ISSUE_TYPE_OPTIONS } from '../constants';
 import SprintGroupedIssueList from '../components/SprintGroupedIssueList';
-import ProjectHeader from '../components/ProjectHeader';
 import IssueFilters from '../components/IssueFilters';
 
 const ProjectIssuesPage = () => {
@@ -47,14 +46,17 @@ const ProjectIssuesPage = () => {
 
     return (
         <div className="h-full bg-white flex flex-col">
-      {/* Header Removed (Handled by Layout) */}
-             
-             {/* Sub-header for Page Title and Filters */}
-             <div className="px-8 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50/50">
+
+            {/* Sub-header for Page Title and Filters */}
+            <div className="px-8 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50/50">
                 <h2 className="text-xl font-bold text-gray-800">Issues</h2>
-                
+
+                <div className="flex-1 ml-4 overflow-x-auto no-scrollbar">
+                    {/* Placeholder for future tabs or breadcrumbs if needed */}
+                </div>
+
                 <div className="flex gap-4">
-                    <IssueFilters 
+                    <IssueFilters
                         assigneeFilter={assigneeFilter}
                         setAssigneeFilter={setAssigneeFilter}
                         typeFilter={typeFilter}
@@ -62,11 +64,11 @@ const ProjectIssuesPage = () => {
                         uniqueAssignees={uniqueAssignees}
                     />
                 </div>
-             </div>
-             
-             <div className="flex-1 overflow-auto p-8">
-                 <SprintGroupedIssueList issues={filteredTasks} showProjectColumn={false} context="issues" />
-             </div>
+            </div>
+
+            <div className="flex-1 overflow-auto p-8">
+                <SprintGroupedIssueList issues={filteredTasks} showProjectColumn={false} />
+            </div>
         </div>
     );
 };

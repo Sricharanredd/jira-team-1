@@ -13,8 +13,9 @@ const TimelinePage = () => {
 
     // Helper to format dates
     const formatDate = (dateStr) => {
-        if (!dateStr) return null;
-        return new Date(dateStr);
+        if (!dateStr) return '-';
+        const d = new Date(dateStr);
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     };
 
     useEffect(() => {
@@ -85,11 +86,11 @@ const TimelinePage = () => {
         maxDate.setDate(maxDate.getDate() + 30);
 
         // Use created_at as fallback for start_date
-        const validTasks = tasks.filter(t => t.start_date || t.created_at || t.due_date);
+        const validTasks = tasks.filter(t => t.start_date || t.created_at || t.end_date);
 
         if (validTasks.length > 0) {
             const startDates = validTasks.map(t => t.start_date ? new Date(t.start_date) : (t.created_at ? new Date(t.created_at) : new Date()));
-            const endDates = validTasks.map(t => t.due_date ? new Date(t.due_date) : new Date());
+            const endDates = validTasks.map(t => t.end_date ? new Date(t.end_date) : new Date());
 
             minDate = new Date(Math.min(...startDates));
             maxDate = new Date(Math.max(...endDates));
@@ -116,7 +117,7 @@ const TimelinePage = () => {
 
     const DAY_WIDTH = zoom === 'weekly' ? 40 : 6; // Compressed for Monthly (6px * 30 = ~180px/month)
     const ROW_HEIGHT = 40; // Compact rows
-    const SIDEBAR_WIDTH = 450; // Widened for Status column
+    const SIDEBAR_WIDTH = 650; // Widened for Status and Date columns
 
     const getPosition = (date) => {
         if (!date) return 0;
@@ -233,12 +234,7 @@ const TimelinePage = () => {
                     >
                         Monthly
                     </button>
-                    <button
-                        className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-medium ml-4"
-                        onClick={() => navigate(`/projects/${projectId}/backlog`)}
-                    >
-                        + Add Task
-                    </button>
+
                 </div>
             </div>
 
@@ -253,8 +249,14 @@ const TimelinePage = () => {
                             <div className="flex-1 px-4 border-r border-gray-100 h-full flex items-center">
                                 Issue
                             </div>
-                            <div className="w-[120px] px-4 h-full flex items-center justify-center">
+                            <div className="w-[120px] px-4 border-r border-gray-100 h-full flex items-center justify-center">
                                 Status
+                            </div>
+                            <div className="w-[100px] px-4 border-r border-gray-100 h-full flex items-center justify-center">
+                                Start
+                            </div>
+                            <div className="w-[100px] px-4 h-full flex items-center justify-center">
+                                End
                             </div>
                         </div>
                         {/* Sidebar Content */}
@@ -284,7 +286,7 @@ const TimelinePage = () => {
                                     </div>
 
                                     {/* Status Column */}
-                                    <div className="w-[120px] flex items-center justify-center px-2 h-full">
+                                    <div className="w-[120px] flex items-center justify-center px-2 h-full border-r border-gray-100">
                                         {row.type === 'task' && (
                                             <span
                                                 className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide border border-black/5 shadow-sm"
@@ -293,6 +295,16 @@ const TimelinePage = () => {
                                                 {row.data.status ? row.data.status.replace('_', ' ') : 'Todo'}
                                             </span>
                                         )}
+                                    </div>
+
+                                    {/* Start Date Column */}
+                                    <div className="w-[100px] flex items-center justify-center px-2 h-full border-r border-gray-100 text-xs text-gray-600">
+                                        {row.type === 'task' && formatDate(row.data.start_date || row.data.created_at)}
+                                    </div>
+
+                                    {/* End Date Column */}
+                                    <div className="w-[100px] flex items-center justify-center px-2 h-full text-xs text-gray-600">
+                                        {row.type === 'task' && formatDate(row.data.end_date)}
                                     </div>
                                 </div>
                             ))}
@@ -303,44 +315,43 @@ const TimelinePage = () => {
                     <div className="flex-1 flex flex-col overflow-auto bg-white relative">
                         {/* Calendar Header */}
                         <div className="sticky top-0 z-10 bg-white" style={{ minWidth: days.length * DAY_WIDTH }}>
-                            <div className="h-[30px] border-b border-gray-200 flex bg-gray-50">
+                            <div className="h-[40px] border-b border-gray-200 flex bg-[#F4F5F7]">
                                 {days.map((day, i) => {
-                                    const showMonth = day.getDate() === 1 || i === 0;
-                                    // In monthly mode, render border at the START of the month (Left)
-                                    // In weekly mode, render border at the END of the day (Right)
-                                    const isMonthStart = zoom === 'monthly' && day.getDate() === 1;
-                                    const isWeekly = zoom === 'weekly';
+                                    const isFirstDayOfMonth = day.getDate() === 1;
+                                    const showLabel = isFirstDayOfMonth || i === 0;
 
+                                    // Styling for Monthly View
+                                    if (zoom === 'monthly') {
+                                        return (
+                                            <div
+                                                key={i}
+                                                className={`flex-shrink-0 flex items-center h-full
+                                                    ${isFirstDayOfMonth ? 'border-l border-gray-300' : ''} 
+                                                `}
+                                                style={{ width: DAY_WIDTH }}
+                                            >
+                                                {showLabel && (
+                                                    <span className="absolute ml-2 text-xs font-bold text-[#5E6C84] uppercase whitespace-nowrap z-20">
+                                                        {day.toLocaleDateString('en-US', { month: 'short' }).toUpperCase()}/{day.toLocaleDateString('en-US', { year: '2-digit' })}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        );
+                                    }
+
+                                    // Styling for Weekly View
                                     return (
                                         <div
                                             key={i}
-                                            className={`flex-shrink-0 text-xs font-semibold text-gray-500 flex items-center 
-                                                ${isWeekly ? 'border-r border-gray-200 px-2' : ''} 
-                                                ${isMonthStart ? 'border-l border-gray-200 relative pl-1' : ''} 
-                                                ${zoom === 'monthly' && !isMonthStart ? 'relative' : ''} 
-                                            `}
+                                            className="flex-shrink-0 text-xs font-semibold text-[#5E6C84] flex flex-col justify-center items-center border-r border-gray-200"
                                             style={{ width: DAY_WIDTH }}
                                         >
-                                            {/* In monthly mode, allow overflow for label */}
-                                            {showMonth && (
-                                                <span className={zoom === 'monthly' ? 'absolute left-1 top-1.5 whitespace-nowrap z-20' : ''}>
-                                                    {day.toLocaleDateString(undefined, { month: 'short' })} {zoom === 'monthly' ? `'${day.toLocaleDateString(undefined, { year: '2-digit' })}` : ''}
-                                                </span>
-                                            )}
+                                            <span className="uppercase">{day.toLocaleDateString('en-US', { weekday: 'short' })}</span>
+                                            <span className="text-[10px]">{day.getDate()}</span>
                                         </div>
                                     );
                                 })}
                             </div>
-                            {/* Hide or Simplify Days Row in Monthly Mode */}
-                            {zoom === 'weekly' && (
-                                <div className="h-[30px] border-b border-gray-200 flex shadow-sm">
-                                    {days.map((day, i) => (
-                                        <div key={i} className="flex-shrink-0 border-r border-gray-200 flex justify-center items-center text-[10px] text-gray-600 font-medium" style={{ width: DAY_WIDTH }}>
-                                            {day.getDate()}
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
                         </div>
 
                         {/* Rows */}
@@ -351,7 +362,7 @@ const TimelinePage = () => {
                                     const isMonthStart = zoom === 'monthly' && day.getDate() === 1;
                                     const isWeekly = zoom === 'weekly';
                                     return (
-                                        <div key={i} className={`${isWeekly ? 'border-r border-gray-200' : ''} ${isMonthStart ? 'border-l border-gray-200' : ''} h-full`} style={{ width: DAY_WIDTH }}></div>
+                                        <div key={i} className={`flex-shrink-0 ${isWeekly ? 'border-r border-gray-200' : ''} ${isMonthStart ? 'border-l border-gray-300' : ''} h-full`} style={{ width: DAY_WIDTH }}></div>
                                     );
                                 })}
                             </div>
@@ -383,7 +394,7 @@ const TimelinePage = () => {
 
                                 // Render Task Bar
                                 const start = task.start_date ? new Date(task.start_date) : (task.created_at ? new Date(task.created_at) : null);
-                                const end = task.due_date ? new Date(task.due_date) : null;
+                                const end = task.end_date ? new Date(task.end_date) : null;
 
                                 const effectiveStart = start || new Date(); // Should not happen with created_at, but safe guard
                                 const startPos = getPosition(effectiveStart);

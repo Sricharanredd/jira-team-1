@@ -16,6 +16,9 @@ const CreateStoryModal = ({ isOpen, onClose, projectId, onStoryCreated }) => {
 
     status: 'backlog', // Default to backlog per Scrum
     issue_type: 'story',
+
+    start_date: '',
+    end_date: '',
     support_doc: null
   });
 
@@ -117,13 +120,20 @@ const CreateStoryModal = ({ isOpen, onClose, projectId, onStoryCreated }) => {
         status: value === 'epic' ? 'backlog' : prev.status
       }));
       setParentError('');
-    } else {
-      // Special Rule: If Status is set to 'backlog', clear Sprint
-      if (name === 'status' && value === 'backlog') {
-        setFormData(prev => ({ ...prev, [name]: value, sprint_number: '' }));
+
+    } else if (name === 'start_date') {
+      // Auto-calculate End Date (Start + 14 days)
+      if (value) {
+        const startDate = new Date(value);
+        const endDate = new Date(startDate);
+        endDate.setDate(startDate.getDate() + 14);
+        const endDateStr = endDate.toISOString().split('T')[0];
+        setFormData(prev => ({ ...prev, [name]: value, end_date: endDateStr }));
       } else {
         setFormData(prev => ({ ...prev, [name]: value }));
       }
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
     }
 
     // Clear subtask/parent error if fixed
@@ -168,7 +178,9 @@ const CreateStoryModal = ({ isOpen, onClose, projectId, onStoryCreated }) => {
       const payload = {
         ...formData,
         project_id: parseInt(selectedProjectId), // REQUIRED by backend schema
-        parent_issue_id: formData.parent_issue ? parseInt(formData.parent_issue) : null
+        parent_issue_id: formData.parent_issue ? parseInt(formData.parent_issue) : null,
+        start_date: formData.start_date || null,
+        end_date: formData.end_date || null
       };
 
       const dataToSend = toFormData(payload);
@@ -186,7 +198,9 @@ const CreateStoryModal = ({ isOpen, onClose, projectId, onStoryCreated }) => {
       } else if (err.response && err.response.status >= 200 && err.response.status < 300) {
         isSuccess = true;
       } else {
-        setError(err.response?.data?.detail || 'Failed to create story');
+        const detail = err.response?.data?.detail;
+        const msg = typeof detail === 'object' ? JSON.stringify(detail, null, 2) : (detail || 'Failed to create story');
+        setError(msg);
       }
     } finally {
       if (isSuccess) {
@@ -194,6 +208,8 @@ const CreateStoryModal = ({ isOpen, onClose, projectId, onStoryCreated }) => {
           if (onStoryCreated) {
             onStoryCreated();
           }
+          alert("Story created successfully!");
+          window.dispatchEvent(new Event('story-created'));
           onClose();
           setFormData({
             title: '',
@@ -204,6 +220,9 @@ const CreateStoryModal = ({ isOpen, onClose, projectId, onStoryCreated }) => {
             reviewer: '',
             status: 'todo',
             issue_type: 'story',
+
+            start_date: '',
+            end_date: '',
             support_doc: null,
             parent_issue: ''
           });
@@ -282,10 +301,31 @@ const CreateStoryModal = ({ isOpen, onClose, projectId, onStoryCreated }) => {
                 type="text"
                 value={formData.sprint_number}
                 onChange={handleChange}
-                className={`shadow border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline ${formData.status === 'backlog' ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`}
-                disabled={formData.status === 'backlog'}
-                placeholder={formData.status === 'backlog' ? 'No Sprint (Backlog)' : ''}
-                required={formData.status !== 'backlog'}
+                className="shadow border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                placeholder="e.g. 1"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-gray-700 text-sm font-bold mb-1">Start Date</label>
+              <input
+                name="start_date"
+                type="date"
+                value={formData.start_date}
+                onChange={handleChange}
+                className="shadow border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 text-sm font-bold mb-1">End Date</label>
+              <input
+                name="end_date"
+                type="date"
+                value={formData.end_date}
+                onChange={handleChange}
+                className="shadow border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
               />
             </div>
           </div>

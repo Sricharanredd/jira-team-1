@@ -31,7 +31,7 @@ def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
     
     # 4. Bootstrap Admin Logic
     # Hardcoded Rule: Only sricharanreddyk33@gmail.com is ADMIN
-    if user.email == "sricharanreddyk33@gmail.com":
+    if user.email == "admin@admin.com":
         assigned_role = models.GlobalRole.ADMIN
     else:
         assigned_role = models.GlobalRole.USER
@@ -90,3 +90,15 @@ def read_my_projects(
     db: Session = Depends(get_db)
 ):
     return crud.get_user_projects(db, user_id=current_user.id)
+
+@router.get("/users/lookup")
+def lookup_user_by_email(email: str, db: Session = Depends(get_db), current_user = Depends(dependencies.get_current_user)):
+    user = crud.get_user_by_email(db, email)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return {
+        "email": user.email,
+        "name": user.name,
+        "preferred_role": user.preferred_role
+    }

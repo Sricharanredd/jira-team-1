@@ -1,0 +1,6 @@
+Error: name 'project_models' is not defined
+Traceback (most recent call last):
+  File "C:\Users\RAMYA SRI\OneDrive\Desktop\FINAL JIRA\jira-team-1\backend\app\modules\project\router.py", line 275, in create_project_issue
+    project_ref = db.query(project_models.Project).filter(project_models.Project.id == project_id).first()
+                           ^^^^^^^^^^^^^^
+NameError: name 'project_models' is not defined

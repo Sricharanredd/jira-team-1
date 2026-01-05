@@ -22,8 +22,6 @@ def create_user(db: Session, user: schemas.UserCreate, global_role: models.Globa
         
     hashed_password = security.get_password_hash(truncated_pwd)
     
-    hashed_password = security.get_password_hash(truncated_pwd)
-    
     db_user = models.User(
         name=user.name,
         email=user.email,
@@ -85,3 +83,15 @@ def get_user_projects(db: Session, user_id: int):
             "role": role
         })
     return projects
+
+def remove_project_member(db: Session, user_id: int, project_id: int):
+    member = db.query(models.ProjectMember).filter(
+        models.ProjectMember.user_id == user_id,
+        models.ProjectMember.project_id == project_id
+    ).first()
+    
+    if member:
+        db.delete(member)
+        db.commit()
+        return True
+    return False

@@ -20,6 +20,7 @@ import { ProjectProvider } from './context/ProjectContext';
 import { AuthProvider } from './context/AuthContext';
 import CalendarPage from './pages/CalendarPage';
 import TimelinePage from './pages/TimelinePage';
+import CreateStoryPage from './pages/CreateStoryPage';
 import GlobalSettingsPage from './pages/GlobalSettingsPage';
 
 import AssignedToMePage from './pages/AssignedToMePage';
@@ -53,6 +54,7 @@ const AppContent = () => {
                 <Route path="/projects/:projectId" element={<ProjectLayout />}>
                     <Route index element={<Board />} />
                     <Route path="backlog" element={<BacklogView />} />
+                    <Route path="create" element={<CreateStoryPage />} />
                     <Route path="reports" element={<ProjectReports />} />
                     <Route path="settings" element={<ProjectSettings />} />
                     <Route path="issues" element={<ProjectIssuesPage />} />

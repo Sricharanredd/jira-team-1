@@ -1,4 +1,5 @@
 from typing import Optional
+from datetime import datetime
 from pydantic import BaseModel, Field
 
 from enum import Enum
@@ -29,6 +30,8 @@ class UserStoryCreate(BaseModel):
     status: StoryStatus = Field(..., example="in_progress")
     issue_type: IssueType = Field(default=IssueType.story, example="story")
     parent_issue_id: Optional[int] = Field(default=None, example=10)
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
 
 
 # -------- UPDATE STATUS (POST) --------
@@ -44,8 +47,11 @@ class UserStoryUpdateRequest(BaseModel):
     assignee: Optional[str] = None
     reviewer: Optional[str] = None
     status: Optional[str] = None  # Added to allow status update via Edit form
+    parent_issue_id: Optional[int] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
 
-from datetime import datetime
+
 
 class UserStoryHistoryResponse(BaseModel):
     id: int
@@ -56,7 +62,7 @@ class UserStoryHistoryResponse(BaseModel):
     changed_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class UserStoryResponse(BaseModel):
@@ -74,6 +80,9 @@ class UserStoryResponse(BaseModel):
     issue_type: str
     parent_issue_id: Optional[int]
     support_doc: Optional[str]
+    start_date: Optional[datetime]
+    end_date: Optional[datetime]
+    created_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
