@@ -1,6 +1,6 @@
 ﻿DB_HOST = "localhost"
 DB_USER = "root"
-DB_PASSWORD = "@kalyan"
+DB_PASSWORD = "Charan@33"
 DB_NAME = "user_story_db"
 
 # JWT Settings

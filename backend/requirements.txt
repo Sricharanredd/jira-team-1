@@ -7,3 +7,5 @@ pydantic
 cryptography
 pytest
 httpx
+python-jose[cryptography]
+bcrypt

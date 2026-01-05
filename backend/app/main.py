@@ -40,8 +40,7 @@ with Session(engine) as db:
         )
         db.add(user_data)
         db.commit()
-        super_admin.global_role = auth_models.GlobalRole.ADMIN
-        db.commit()
+
 
     # DEBUG: Print all user stories
     stories = db.query(story_models.UserStory).all()
