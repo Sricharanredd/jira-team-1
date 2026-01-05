@@ -15,6 +15,12 @@ const StoryDetailPage = () => {
 
 
     const [parentIssues, setParentIssues] = useState([]);
+    
+    // New State for Edit Controls
+    const [availableAssignees, setAvailableAssignees] = useState([]);
+    const [availableSprints, setAvailableSprints] = useState([]);
+    const [rawUserRole, setRawUserRole] = useState(null);
+
     const [formData, setFormData] = useState({
         title: '',
         assignee: '',
@@ -47,47 +53,69 @@ const StoryDetailPage = () => {
 
     const fetchData = async () => {
         try {
-            const [storyRes, historyRes, projectsRes, allStoriesRes] = await Promise.all([
-                api.get(`/user-story/${id}`),
+            // 1. Fetch Story First
+            const storyRes = await api.get(`/user-story/${id}`);
+            const currentStory = storyRes.data;
+            setStory(currentStory);
+            
+            // 2. Fetch Dependencies
+            const [historyRes, projectsRes, allStoriesRes] = await Promise.all([
                 api.get(`/user-story/${id}/history`),
                 api.get('/auth/me/projects'),
-                api.get('/user-story')
+                api.get('/user-story'), 
             ]);
-            setStory(storyRes.data);
+
+            // 3. Fetch Assignees (Safely)
+            let assignees = [];
+            try {
+                 const assigneesRes = await api.get(`/projects/${currentStory.project_id}/assignees`);
+                 assignees = assigneesRes.data;
+            } catch (e) {
+                 console.warn("Could not fetch assignees", e);
+            }
+            setAvailableAssignees(assignees);
+
             setHistory(historyRes.data);
 
-            // Filter Epics for the dropdown (exclude self and non-epics if current is story)
-            // Assuming current can only be child if it's not an epic?
-            // Simplified: Get all Epics in the same project
-            const projectEpics = allStoriesRes.data.filter(i =>
-                i.project_id === storyRes.data.project_id &&
+            const projectStories = allStoriesRes.data.filter(s => s.project_id === currentStory.project_id);
+            
+            // Epics
+            const projectEpics = projectStories.filter(i =>
                 i.issue_type === 'epic' &&
-                i.id !== storyRes.data.id
+                i.id !== currentStory.id
             );
             setParentIssues(projectEpics);
+            
+            // Sprints logic
+            const sprints = [...new Set(projectStories.map(s => s.sprint_number).filter(s => s !== null && s !== '' && s !== undefined))];
+            sprints.sort((a, b) => parseInt(a) - parseInt(b));
+            setAvailableSprints(sprints);
 
-            // Find role
-            const currentProject = projectsRes.data.find(p => p.id === storyRes.data.project_id);
+            // Role
+            const currentProject = projectsRes.data.find(p => p.id === currentStory.project_id);
             if (currentProject) {
-                // Map API role to UI display (ADMIN -> Admin, MEMBER -> User)
+                setRawUserRole(currentProject.role); 
                 const roleMap = {
                     'ADMIN': 'Admin',
-                    'MEMBER': 'User',
-                    'VIEWER': 'Viewer'
+                    'SCRUM_MASTER': 'Scrum Master',
+                    'DEVELOPER': 'Developer',
+                    'TESTER': 'Tester',
+                    'VIEWER': 'Viewer',
+                    'MEMBER': 'User'
                 };
                 setUserRole(roleMap[currentProject.role] || currentProject.role);
             }
 
             setFormData({
-                title: storyRes.data.title,
-                assignee: storyRes.data.assignee,
-                reviewer: storyRes.data.reviewer,
-                description: storyRes.data.description,
-                status: storyRes.data.status,
-                sprint_number: storyRes.data.sprint_number,
-                start_date: storyRes.data.start_date ? storyRes.data.start_date.split('T')[0] : '',
-                end_date: storyRes.data.end_date ? storyRes.data.end_date.split('T')[0] : '',
-                parent_issue_id: storyRes.data.parent_issue_id || ''
+                title: currentStory.title,
+                assignee: currentStory.assignee,
+                reviewer: currentStory.reviewer,
+                description: currentStory.description,
+                status: currentStory.status,
+                sprint_number: currentStory.sprint_number || '',
+                start_date: currentStory.start_date ? currentStory.start_date.split('T')[0] : '',
+                end_date: currentStory.end_date ? currentStory.end_date.split('T')[0] : '',
+                parent_issue_id: currentStory.parent_issue_id || ''
             });
         } catch (error) {
             console.error("Failed to fetch story details", error);
@@ -493,12 +521,25 @@ const StoryDetailPage = () => {
                             <div className="grid grid-cols-2 gap-6">
                                 <div>
                                     <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1.5">Assignee</label>
-                                    <input
-                                        type="text"
-                                        value={formData.assignee}
-                                        onChange={(e) => setFormData({ ...formData, assignee: e.target.value })}
-                                        className="w-full border border-[#DFE1E6] hover:border-[#B3BAC5] rounded-[3px] px-2 py-1.5 text-sm"
-                                    />
+                                    {['ADMIN', 'SCRUM_MASTER'].includes(rawUserRole) ? (
+                                        <select
+                                            value={formData.assignee}
+                                            onChange={(e) => setFormData({ ...formData, assignee: e.target.value })}
+                                            className="w-full border border-[#DFE1E6] hover:border-[#B3BAC5] rounded-[3px] px-2 py-1.5 text-sm"
+                                        >
+                                            <option value="">Unassigned</option>
+                                            {availableAssignees.map(user => (
+                                                <option key={user.id} value={user.value}>{user.label}</option>
+                                            ))}
+                                        </select>
+                                    ) : (
+                                        <input
+                                            type="text"
+                                            value={formData.assignee || 'Unassigned'}
+                                            disabled
+                                            className="w-full border border-[#DFE1E6] bg-gray-100 text-gray-500 rounded-[3px] px-2 py-1.5 text-sm cursor-not-allowed"
+                                        />
+                                    )}
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1.5">Status</label>
@@ -521,13 +562,17 @@ const StoryDetailPage = () => {
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1.5">Sprint</label>
-                                    <input
-                                        type="text"
+                                    <select
                                         value={formData.sprint_number}
                                         onChange={(e) => setFormData({ ...formData, sprint_number: e.target.value })}
                                         disabled={formData.status === 'backlog'}
                                         className={`w-full border border-[#DFE1E6] hover:border-[#B3BAC5] rounded-[3px] px-2 py-1.5 text-sm ${formData.status === 'backlog' ? 'bg-gray-100 cursor-not-allowed text-gray-400' : 'text-[#172B4D]'}`}
-                                    />
+                                    >
+                                        <option value="">Backlog (No Sprint)</option>
+                                        {availableSprints.map(sprint => (
+                                            <option key={sprint} value={sprint}>Sprint {sprint}</option>
+                                        ))}
+                                    </select>
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1.5">Start Date</label>
