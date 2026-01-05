@@ -2,12 +2,16 @@ from sqlalchemy.orm import Session
 from app.modules.auth import models, schemas, security
 from app.modules.project.models import Project
 
+# Fetch user from database using unique user ID
 def get_user_by_id(db: Session, user_id: int):
     return db.query(models.User).filter(models.User.id == user_id).first()
 
+# Fetch user from database using unique email address for login authentication
 def get_user_by_email(db: Session, email: str):
     return db.query(models.User).filter(models.User.email == email).first()
 
+# Create new user in database with hashed password and assigned role
+# Handles bcrypt 72-byte password limit by truncating if necessary
 def create_user(db: Session, user: schemas.UserCreate, global_role: models.GlobalRole):
     # Bcrypt has a 72 byte limit. 
     # We must truncate BYTES, not characters.
@@ -35,6 +39,8 @@ def create_user(db: Session, user: schemas.UserCreate, global_role: models.Globa
     db.refresh(db_user)
     return db_user
 
+# Get user's role in a specific project for RBAC (Role-Based Access Control)
+# Returns role if user is project member, None otherwise
 def get_user_role(db: Session, user_id: int, project_id: int):
     member = db.query(models.ProjectMember).filter(
         models.ProjectMember.user_id == user_id,
@@ -46,6 +52,8 @@ def get_user_role(db: Session, user_id: int, project_id: int):
         return member.role
     return None
 
+# Assign or update user role in a project (Admin, Developer, Viewer)
+# Creates new ProjectMember if user not yet in project, updates role if already member
 def assign_role(db: Session, user_id: int, project_id: int, role: models.RoleType):
     member = db.query(models.ProjectMember).filter(
         models.ProjectMember.user_id == user_id,

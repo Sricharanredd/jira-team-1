@@ -27,7 +27,7 @@ import ProjectHeader from './ProjectHeader';
 // Columns configuration with colors
 import { STORY_STATUS, ISSUE_TYPE_OPTIONS } from '../constants';
 
-// Columns configuration with colors
+// Define Kanban board columns with status mapping, colors, and labels
 const COLUMNS = {
   [STORY_STATUS.TODO]: { title: 'TO DO', id: STORY_STATUS.TODO, color: 'bg-gray-500', bg: 'bg-gray-50' },
   [STORY_STATUS.IN_PROGRESS]: { title: 'IN PROGRESS', id: STORY_STATUS.IN_PROGRESS, color: 'bg-blue-500', bg: 'bg-blue-50' },
@@ -35,6 +35,7 @@ const COLUMNS = {
   [STORY_STATUS.DONE]: { title: 'DONE', id: STORY_STATUS.DONE, color: 'bg-green-500', bg: 'bg-green-50' },
 };
 
+// Column component: Represents single status column with droppable area for tasks
 const Column = ({ title, id, tasks, onClickTask, color, bg, onCreateIssue, canCreateIssue }) => {
   const { setNodeRef, isOver } = useDroppable({
     id: id,
@@ -85,6 +86,7 @@ const Column = ({ title, id, tasks, onClickTask, color, bg, onCreateIssue, canCr
   );
 };
 
+// Main Board component: Kanban board with drag-and-drop functionality for task status management
 const Board = () => {
   const navigate = useNavigate();
   const { projectId } = useParams();

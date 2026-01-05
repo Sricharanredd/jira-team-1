@@ -2,15 +2,19 @@ from sqlalchemy.orm import Session
 from . import models, schemas
 from app.modules.project import models as project_models
 
+# Fetch all user stories, optionally filtered by project_id for project-specific views
 def get_all_user_stories(db: Session, project_id: int | None = None):
     query = db.query(models.UserStory)
     if project_id:
         query = query.filter(models.UserStory.project_id == project_id)
     return query.all()
 
+# Get single user story by unique ID for detail view and updates
 def get_user_story_by_id(db: Session, story_id: int):
     return db.query(models.UserStory).filter(models.UserStory.id == story_id).first()
 
+# Auto-generate unique story code in format PREFIX-0001 for each new issue
+# Uses project prefix and increments number based on last story in project
 def generate_story_code(db: Session, project_id: int) -> str:
     # Fetch Project to get prefix
     project = db.query(project_models.Project).filter(project_models.Project.id == project_id).first()
@@ -23,23 +27,33 @@ def generate_story_code(db: Session, project_id: int) -> str:
         .order_by(models.UserStory.id.desc())\
         .first()
 
-    if last_story and last_story.story_code:
-        try:
-            # Assumes format "PREFIX-0001"
-            last_num = int(last_story.story_code.split('-')[-1])
-            next_num = last_num + 1
-        except (ValueError, IndexError):
-            # Fallback if code format is weird
-            count = db.query(models.UserStory).filter(models.UserStory.project_id == project_id).count()
-            next_num = count + 1
+    if last_story:
+        # Get the actual Python string value, not the Column object
+        story_code_val = getattr(last_story, 'story_code', None)
+        if story_code_val:
+            try:
+                # Assumes format "PREFIX-0001"
+                last_num = int(story_code_val.split('-')[-1])
+                next_num = last_num + 1
+            except (ValueError, IndexError):
+                # Fallback if code format is weird
+                count = db.query(models.UserStory).filter(models.UserStory.project_id == project_id).count()
+                next_num = count + 1
+        else:
+            next_num = 1
     else:
         next_num = 1
     
     # Use project_prefix preferred, fallback to name if empty
-    prefix = project.project_prefix if project.project_prefix else project.project_name[:2].upper()
+    # Extract actual values to avoid Column type issues
+    prefix_raw = getattr(project, 'project_prefix', None)
+    name_raw = getattr(project, 'project_name', '')
+    prefix_val = prefix_raw if prefix_raw else name_raw[:2].upper()
     
-    return f"{prefix}-{next_num:04d}"
+    return f"{prefix_val}-{next_num:04d}"
 
+# Create new user story/epic/task with auto-generated code and hierarchy validation
+# Validates parent-child relationships (Epic > Story > Task > Subtask) before creation
 def create_user_story(db: Session, story: schemas.UserStoryCreate, file_path: str | None, user_id: int | None = None):
     print(f"DEBUG: create_user_story called with user_id={user_id}")
     if user_id is None:
@@ -117,8 +131,9 @@ def create_user_story(db: Session, story: schemas.UserStoryCreate, file_path: st
     db.flush() # Flush to get ID, do not commit yet
     db.refresh(db_story)
     
-    # Initial history log
-    log_history(db, db_story.id, "status", None, story.status)
+    # Initial history log - access instance attribute directly from __dict__ to get scalar value
+    story_id_val: int = db_story.__dict__['id']
+    log_history(db, story_id_val, "status", None, story.status)
     
     return db_story
 
@@ -160,10 +175,13 @@ def update_user_story_status(db: Session, story_id: int, new_status: str):
         if has_open_children:
             raise ValueError("Cannot complete parent issue with open children")
 
-    if old_status != new_status:
-        log_history(db, story_id, "status", old_status, new_status)
+    # Get the actual Python string value from old_status
+    old_status_val = getattr(db_story, 'status', None)
+    if old_status_val != new_status:
+        log_history(db, story_id, "status", old_status_val, new_status)
     
-    db_story.status = new_status
+    # Use SQLAlchemy update to avoid Column type issues
+    db.query(models.UserStory).filter(models.UserStory.id == story_id).update({"status": new_status})
     db.commit()
     db.refresh(db_story)
     return db_story
