@@ -88,8 +88,8 @@ export const ProjectProvider = ({ children }) => {
 
   // Derived State Helpers
   const epics = issues.filter(i => i.issue_type === 'epic');
-  // Backlog issues: No sprint assigned OR explicitly set to 'backlog' status
-  const backlogIssues = issues.filter(i => i.issue_type !== 'epic' && (!i.sprint_number || i.status === 'backlog'));
+  // Backlog issues: No sprint assigned (Regardles of status, though status usually is backlog)
+  const backlogIssues = issues.filter(i => i.issue_type !== 'epic' && !i.sprint_number);
   
   // Derived Role Flags (Safe Usage)
   const isAdmin = userRole === 'ADMIN';

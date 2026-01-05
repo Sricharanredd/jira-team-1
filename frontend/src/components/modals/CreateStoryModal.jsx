@@ -132,6 +132,13 @@ const CreateStoryModal = ({ isOpen, onClose, projectId, onStoryCreated }) => {
       } else {
         setFormData(prev => ({ ...prev, [name]: value }));
       }
+    } else if (name === 'status') {
+      // If status becomes backlog, clear sprint
+      if (value === 'backlog') {
+        setFormData(prev => ({ ...prev, [name]: value, sprint_number: '' }));
+      } else {
+        setFormData(prev => ({ ...prev, [name]: value }));
+      }
     } else {
       setFormData(prev => ({ ...prev, [name]: value }));
     }
@@ -303,6 +310,8 @@ const CreateStoryModal = ({ isOpen, onClose, projectId, onStoryCreated }) => {
                 onChange={handleChange}
                 className="shadow border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
                 placeholder="e.g. 1"
+                disabled={formData.status === 'backlog'}
+                title={formData.status === 'backlog' ? "Sprint cannot be assigned to Backlog items" : ""}
               />
             </div>
           </div>

@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../api/api';
 
+import { STATUS_OPTIONS } from '../constants';
+
 const StoryDetailPage = () => {
     const { id } = useParams();
     const navigate = useNavigate();
@@ -10,12 +12,7 @@ const StoryDetailPage = () => {
     const [loading, setLoading] = useState(true);
     const [isEditing, setIsEditing] = useState(false);
 
-    const STATUS_OPTIONS = [
-        { value: 'todo', label: 'To Do' },
-        { value: 'in_progress', label: 'In Progress' },
-        { value: 'testing', label: 'Testing' },
-        { value: 'done', label: 'Done' },
-    ];
+
 
     const [parentIssues, setParentIssues] = useState([]);
     const [formData, setFormData] = useState({
@@ -507,13 +504,30 @@ const StoryDetailPage = () => {
                                     <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1.5">Status</label>
                                     <select
                                         value={formData.status}
-                                        onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                                        onChange={(e) => {
+                                            const newStatus = e.target.value;
+                                            setFormData(prev => ({
+                                                ...prev,
+                                                status: newStatus,
+                                                sprint_number: newStatus === 'backlog' ? '' : prev.sprint_number
+                                            }));
+                                        }}
                                         className="w-full border border-[#DFE1E6] hover:border-[#B3BAC5] rounded-[3px] px-2 py-1.5 text-sm"
                                     >
                                         {STATUS_OPTIONS.map(opt => (
                                             <option key={opt.value} value={opt.value}>{opt.label}</option>
                                         ))}
                                     </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1.5">Sprint</label>
+                                    <input
+                                        type="text"
+                                        value={formData.sprint_number}
+                                        onChange={(e) => setFormData({ ...formData, sprint_number: e.target.value })}
+                                        disabled={formData.status === 'backlog'}
+                                        className={`w-full border border-[#DFE1E6] hover:border-[#B3BAC5] rounded-[3px] px-2 py-1.5 text-sm ${formData.status === 'backlog' ? 'bg-gray-100 cursor-not-allowed text-gray-400' : 'text-[#172B4D]'}`}
+                                    />
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1.5">Start Date</label>

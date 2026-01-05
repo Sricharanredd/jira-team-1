@@ -41,7 +41,11 @@ const TaskDetailsModal = ({ isOpen, onClose, task, onUpdate, isReadOnly }) => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    if (name === 'status' && value === 'backlog') {
+        setFormData(prev => ({ ...prev, [name]: value, sprint_number: '' }));
+    } else {
+        setFormData(prev => ({ ...prev, [name]: value }));
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -150,7 +154,8 @@ const TaskDetailsModal = ({ isOpen, onClose, task, onUpdate, isReadOnly }) => {
                               type="text"
                               value={formData.sprint_number}
                               onChange={handleChange}
-                              className="w-16 bg-gray-50 border border-gray-200 text-gray-700 py-1 px-2 rounded text-xs font-medium focus:outline-none focus:bg-white focus:border-blue-500 transition-colors"
+                              disabled={formData.status === 'backlog'}
+                              className={`w-16 bg-gray-50 border border-gray-200 text-gray-700 py-1 px-2 rounded text-xs font-medium focus:outline-none focus:bg-white focus:border-blue-500 transition-colors ${formData.status === 'backlog' ? 'opacity-50 cursor-not-allowed' : ''}`}
                           />
                        </div>
                     </>
