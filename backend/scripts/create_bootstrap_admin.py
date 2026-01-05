@@ -5,10 +5,10 @@ API_URL = "http://127.0.0.1:8000"
 
 def create_admin():
     payload = {
-        "name": "SriCharan",
-        "email": "sricharanreddyk33@gmail.com",
-        "password": "Charan@33",
-        "confirm_password": "Charan@33",
+        "name": "admin",
+        "email": "admin@admin.com",
+        "password": "admin@123",
+        "confirm_password": "admin@123",
         "preferred_project_role": "VIEWER" # This is ignored for admin anyway
     }
     

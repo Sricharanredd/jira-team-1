@@ -7,5 +7,9 @@ pydantic
 cryptography
 pytest
 httpx
+<<<<<<< HEAD
 python-jose[cryptography]
+=======
+python-jose
+>>>>>>> 4eaf44f2bf43d973c08da02bfd1566aa553fb99f
 bcrypt

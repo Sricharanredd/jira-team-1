@@ -14,8 +14,10 @@ const ProjectSidebar = () => {
   // Navigation Items
   const navItems = [
     { name: 'Board', path: `/projects/${projectId}`, icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />, exact: true },
+
     { name: 'Backlog', path: `/projects/${projectId}/backlog`, icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" /> },
     { name: 'Issues', path: `/projects/${projectId}/issues`, icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /> },
+
     { name: 'Reports', path: `/projects/${projectId}/reports`, icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /> },
     { name: 'Calendar', path: `/projects/${projectId}/calendar`, icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /> },
     { name: 'Timeline', path: `/projects/${projectId}/timeline`, icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /> },
@@ -65,6 +67,8 @@ const ProjectSidebar = () => {
       </div>
 
       {/* Nav Items */}
+
+
       <nav className="flex-1 py-4 space-y-1">
         {navItems.map((item) => (
           <NavLink
@@ -85,8 +89,8 @@ const ProjectSidebar = () => {
                 if (context === 'timeline' && item.name === 'Timeline') isContextActive = true;
 
                 return `flex items-center px-4 py-3 transition-colors border-l-4 ${isContextActive
-                    ? 'bg-gray-800 border-blue-500 text-white'
-                    : 'border-transparent text-gray-400 hover:bg-gray-800 hover:text-gray-200'
+                  ? 'bg-gray-800 border-blue-500 text-white'
+                  : 'border-transparent text-gray-400 hover:bg-gray-800 hover:text-gray-200'
                   } ${isSidebarCollapsed ? 'justify-center px-0' : ''}`;
               }
 
@@ -94,8 +98,8 @@ const ProjectSidebar = () => {
               const activeState = isActive || (item.exact && location.pathname === item.path);
 
               return `flex items-center px-4 py-3 transition-colors border-l-4 ${activeState
-                  ? 'bg-gray-800 border-blue-500 text-white'
-                  : 'border-transparent text-gray-400 hover:bg-gray-800 hover:text-gray-200'
+                ? 'bg-gray-800 border-blue-500 text-white'
+                : 'border-transparent text-gray-400 hover:bg-gray-800 hover:text-gray-200'
                 } ${isSidebarCollapsed ? 'justify-center px-0' : ''}`;
             }}
             end={item.exact}

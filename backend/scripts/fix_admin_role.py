@@ -9,7 +9,7 @@ def fix_admin_and_audit():
     engine = create_engine(DATABASE_URL)
     with engine.connect() as conn:
         print("--- Fixing Admin Preferred Role ---")
-        email = "sricharanreddyk33@gmail.com"
+        email = "admin@admin.com"
         conn.execute(text("UPDATE users SET preferred_role = 'DEVELOPER' WHERE email = :email"), {"email": email})
         conn.commit()
         print(f"Updated {email} preferred_role to DEVELOPER.")

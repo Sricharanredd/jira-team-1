@@ -34,14 +34,14 @@ const ProjectSettings = () => {
         e.preventDefault();
         setError(null);
         setSuccessMsg('');
-        
+
         try {
             const formData = new FormData();
             formData.append('email', newMemberEmail);
             formData.append('role', newMemberRole);
-            
+
             await api.post(`/projects/${projectId}/members`, formData);
-            
+
             setSuccessMsg('Member added successfully!');
             setNewMemberEmail('');
             // Refresh list
@@ -49,6 +49,21 @@ const ProjectSettings = () => {
             setMembers(res.data);
         } catch (err) {
             setError(err.response?.data?.detail || "Failed to add member");
+        }
+    };
+
+    const handleEmailBlur = async () => {
+        if (!newMemberEmail) return;
+        try {
+            const res = await api.get(`/auth/users/lookup?email=${newMemberEmail}`);
+            if (res.data && res.data.preferred_role) {
+                setNewMemberRole(res.data.preferred_role);
+                // Optional: Show a subtle indicator found?
+                console.log("Autofilled role:", res.data.preferred_role);
+            }
+        } catch (err) {
+            // User not found or error, ignore for autofill
+            console.log("User lookup failed for autofill", err);
         }
     };
 
@@ -61,25 +76,26 @@ const ProjectSettings = () => {
     return (
         <div className="p-0 max-w-none mx-auto bg-gray-50 min-h-full flex flex-col">
             {/* Header Removed (Handled by Layout) */}
-            
+
             <div className="p-8 max-w-4xl mx-auto w-full flex-1">
-            
+
                 {/* Project Members Section */}
                 <div className="bg-white rounded-lg shadow overflow-hidden mb-8">
                     <div className="px-6 py-4 border-b border-gray-200">
                         <h2 className="text-lg font-medium text-gray-900">Team Members</h2>
                     </div>
-                    
+
                     {/* Add Member Form */}
                     <div className="p-6 bg-gray-50 border-b border-gray-200">
                         <h3 className="text-sm font-medium text-gray-700 mb-2">Add New Member</h3>
                         <form onSubmit={handleAddMember} className="flex gap-4 items-end">
                             <div className="flex-1">
                                 <label className="block text-xs text-gray-500 mb-1">Email Address</label>
-                                <input 
-                                    type="email" 
+                                <input
+                                    type="email"
                                     value={newMemberEmail}
                                     onChange={(e) => setNewMemberEmail(e.target.value)}
+                                    onBlur={handleEmailBlur}
                                     className="w-full border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
                                     placeholder="colleague@example.com"
                                     required
@@ -99,7 +115,7 @@ const ProjectSettings = () => {
                                     <option value="VIEWER">Viewer</option>
                                 </select>
                             </div>
-                            <button 
+                            <button
                                 type="submit"
                                 className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 font-medium text-sm shadow-sm"
                             >
@@ -116,6 +132,7 @@ const ProjectSettings = () => {
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                                {userRole === 'ADMIN' && <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>}
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
@@ -139,7 +156,11 @@ const ProjectSettings = () => {
                                                         setSuccessMsg(`Updated ${m.name}'s role to ${newRole}`);
                                                         setTimeout(() => setSuccessMsg(''), 3000);
                                                     } catch (err) {
-                                                        setError(err.response?.data?.detail || "Failed to update role");
+                                                        const errorMsg = err.response?.data?.detail
+                                                            ? (typeof err.response.data.detail === 'object' ? JSON.stringify(err.response.data.detail) : err.response.data.detail)
+                                                            : (err.message || "Failed to update role");
+                                                        alert("Error updating role: " + errorMsg);
+                                                        console.error("Role update failed:", err);
                                                     }
                                                 }}
                                                 className="text-xs border-gray-300 rounded shadow-sm focus:border-blue-500 focus:ring-blue-500"
@@ -152,14 +173,33 @@ const ProjectSettings = () => {
                                             </select>
                                         ) : (
                                             <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                                                ${m.role === 'ADMIN' ? 'bg-purple-100 text-purple-800' : 
-                                                  m.role === 'SCRUM_MASTER' ? 'bg-blue-100 text-blue-800' :
-                                                  m.role === 'DEVELOPER' ? 'bg-green-100 text-green-800' :
-                                                  'bg-gray-100 text-gray-800'}`}>
+                                                ${m.role === 'ADMIN' ? 'bg-purple-100 text-purple-800' :
+                                                    m.role === 'SCRUM_MASTER' ? 'bg-blue-100 text-blue-800' :
+                                                        m.role === 'DEVELOPER' ? 'bg-green-100 text-green-800' :
+                                                            'bg-gray-100 text-gray-800'}`}>
                                                 {m.role}
                                             </span>
                                         )}
                                     </td>
+                                    {userRole === 'ADMIN' && (
+                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                            <button
+                                                onClick={async () => {
+                                                    if (!window.confirm(`Are you sure you want to remove ${m.name} from this project?`)) return;
+                                                    try {
+                                                        await api.delete(`/projects/${projectId}/members/${m.user_id}`);
+                                                        setMembers(prev => prev.filter(mem => mem.user_id !== m.user_id));
+                                                        setSuccessMsg(`Removed ${m.name} from project`);
+                                                    } catch (err) {
+                                                        alert("Failed to remove member: " + (err.response?.data?.detail || err.message));
+                                                    }
+                                                }}
+                                                className="text-red-600 hover:text-red-900"
+                                            >
+                                                Delete
+                                            </button>
+                                        </td>
+                                    )}
                                 </tr>
                             ))}
                         </tbody>

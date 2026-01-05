@@ -8,7 +8,7 @@ from app.database import DATABASE_URL
 def restore_project_admin():
     engine = create_engine(DATABASE_URL)
     with engine.connect() as conn:
-        email = "sricharanreddyk33@gmail.com"
+        email = "admin@admin.com"
         print(f"Restoring Project ADMIN access for {email}...")
         
         # Get User ID

@@ -181,7 +181,6 @@ const Board = () => {
   };
 
   const handleTaskClick = (task) => {
-    // Navigate to full details page instead of modal
     navigate(`/projects/${projectId}/issues/${task.id}?context=board`);
   };
 
@@ -321,6 +320,7 @@ const Board = () => {
           </DragOverlay>
         </DndContext>
       </div>
+
     </div>
   );
 };

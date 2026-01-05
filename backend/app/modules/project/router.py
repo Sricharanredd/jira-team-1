@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Form, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from app.database import get_db
-from app.modules.project import crud as project_crud, schemas as project_schemas
+from app.modules.project import crud as project_crud, schemas as project_schemas, models as project_models
 from app.modules.auth import dependencies as auth_deps, models as auth_models, crud as auth_crud
 from app.modules.user_story import models as story_models, schemas as story_schemas, crud as story_crud
 from typing import List
@@ -173,6 +173,8 @@ def create_project_issue(
     status: story_schemas.StoryStatus = Form(...),
     issue_type: story_schemas.IssueType = Form(story_schemas.IssueType.story),
     parent_issue_id: int | None = Form(None),
+    start_date: str | None = Form(None),
+    end_date: str | None = Form(None),
     support_doc: UploadFile | None = File(None),
     db: Session = Depends(get_db),
     current_user: auth_models.User = Depends(auth_deps.get_current_user)
@@ -193,17 +195,27 @@ def create_project_issue(
              detail=f"Permission denied. Role: {user_role} ({type(user_role)}) UID: {current_user.id} PID: {project_id}"
          )
 
-    # 3. Check Business Rules (Duplicate Title)
-    existing_story = db.query(story_models.UserStory).filter(
-        story_models.UserStory.project_id == project_id,
-        story_models.UserStory.title == title
-    ).first()
-    
-    if existing_story:
-        raise HTTPException(
-            status_code=400,
-            detail="An issue with this title already exists in this project. Please choose a different title."
-        )
+    # 3. Check Business Rules (Duplicate Title) - Auto-resolve duplicates
+    base_title = title
+    counter = 1
+    while True:
+        existing_story = db.query(story_models.UserStory).filter(
+            story_models.UserStory.project_id == project_id,
+            story_models.UserStory.title == title
+        ).first()
+        
+        if not existing_story:
+            break
+            
+        # If exists, append counter
+        title = f"{base_title} ({counter})"
+        counter += 1
+
+    # Convert empty strings to None for date fields
+    if start_date == "":
+        start_date = None
+    if end_date == "":
+        end_date = None
 
     # 4. Prepare Data
     try:
@@ -217,7 +229,10 @@ def create_project_issue(
             description=description,
             status=status,
             issue_type=issue_type,
+
             parent_issue_id=parent_issue_id,
+            start_date=start_date,
+            end_date=end_date,
         )
     except Exception as e:
         raise HTTPException(status_code=422, detail=str(e).replace("\n", " "))
@@ -250,24 +265,43 @@ def create_project_issue(
             shutil.copyfileobj(support_doc.file, buffer)
 
         db_story.support_doc_path = file_path
-        db.commit()
+        # db.commit() -- Removed here, will commit at the end
 
-    return {
-        "id": db_story.id,
-        "project_id": db_story.project_id,
-        "project_name": db_story.project.project_name,
-        "release_number": db_story.release_number,
-        "sprint_number": db_story.sprint_number,
-        "story_code": db_story.story_code,
-        "assignee": db_story.assignee,
-        "reviewer": db_story.reviewer,
-        "title": db_story.title,
-        "description": db_story.description,
-        "status": db_story.status,
-        "issue_type": db_story.issue_type,
-        "parent_issue_id": db_story.parent_issue_id,
-        "support_doc": os.path.basename(db_story.support_doc_path) if db_story.support_doc_path else None,
-    }
+    try:
+        db.commit() # Final Commit for the transaction
+        db.refresh(db_story) # Refresh to ensure relationships/attributes are loaded for response
+
+        # Fetch project name explicitly to avoid lazy loading issues
+        project_ref = db.query(project_models.Project).filter(project_models.Project.id == project_id).first()
+        project_name = project_ref.project_name if project_ref else "Unknown"
+
+        return {
+            "id": db_story.id,
+            "project_id": db_story.project_id,
+            "project_name": project_name,
+            "release_number": db_story.release_number,
+            "sprint_number": db_story.sprint_number,
+            "story_code": db_story.story_code,
+            "assignee": db_story.assignee,
+            "reviewer": db_story.reviewer,
+            "title": db_story.title,
+            "description": db_story.description,
+            "status": db_story.status,
+            "issue_type": db_story.issue_type,
+            "parent_issue_id": db_story.parent_issue_id,
+            "support_doc": os.path.basename(db_story.support_doc_path) if db_story.support_doc_path else None,
+            "start_date": db_story.start_date,
+            "end_date": db_story.end_date,
+            "created_at": db_story.created_at
+        }
+    except Exception as e:
+        print(f"CRITICAL ERROR generating response or committing: {e}")
+        import traceback
+        with open("error_log.txt", "w") as f:
+            f.write(f"Error: {e}\n")
+            traceback.print_exc(file=f)
+        raise HTTPException(status_code=500, detail=f"Story creation failed: {str(e)}")
+
 
 # -------------------- MEMBER MANAGEMENT --------------------
 
@@ -314,21 +348,63 @@ def add_project_member(
     # 1. Check Permissions
     current_role = auth_deps.get_current_user_role(project_id, db, current_user)
     print(f"DEBUG: add_project_member UID={current_user.id} PID={project_id} ROLE={current_role}")
+    print(f"DEBUG: payload email={email} role={role}")
     
     is_global_admin = current_user.global_role == auth_models.GlobalRole.ADMIN
     
     if not (is_global_admin or (current_role and auth_deps.Permissions.can_manage_members(current_role))):
         raise HTTPException(status_code=403, detail="Only Admins or Scrum Masters can manage members")
 
-    # 2. Validations
-    user_to_add = auth_crud.get_user_by_email(db, email)
-    if not user_to_add:
-        raise HTTPException(status_code=404, detail="User with this email not found")
+    try:
+        # 2. Validations
+        user_to_add = auth_crud.get_user_by_email(db, email)
+        if not user_to_add:
+            raise HTTPException(status_code=404, detail="User with this email not found")
 
-    # 3. Add or Update Member
-    auth_crud.assign_role(db, user_to_add.id, project_id, role)
+        # Strict Role Matching Rule
+        # If user has a preferred_role, they must be added with that role.
+        if user_to_add.preferred_role and user_to_add.preferred_role != role:
+             raise HTTPException(
+                status_code=400, 
+                detail=f"Role mismatch: This user registered as '{user_to_add.preferred_role}'. You cannot assign them as '{role}'."
+            )
+
+        # 3. Add or Update Member
+        auth_crud.assign_role(db, user_to_add.id, project_id, role)
+        
+        return {"message": "Member added/updated successfully"}
+    except Exception as e:
+        print(f"ERROR: add_project_member failed: {e}")
+        # Re-raise HTTPExceptions as is
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+
+@router.delete("/projects/{project_id}/members/{user_id}", tags=["Members"])
+def remove_project_member(
+    project_id: int,
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: auth_models.User = Depends(auth_deps.get_current_user)
+):
+    # 1. Check Permissions
+    current_role = auth_deps.get_current_user_role(project_id, db, current_user)
+    is_global_admin = current_user.global_role == auth_models.GlobalRole.ADMIN
     
-    return {"message": "Member added/updated successfully"}
+    # Only Admin or Scrum Master can remove members
+    if not (is_global_admin or (current_role and auth_deps.Permissions.can_manage_members(current_role))):
+        raise HTTPException(status_code=403, detail="Only Admins or Scrum Masters can remove members")
+
+    # 2. Prevent removing self (optional safety, allows admins to remove themselves if they want)
+    if user_id == current_user.id:
+         raise HTTPException(status_code=400, detail="You cannot remove yourself from the project.")
+
+    # 3. Remove Member
+    success = auth_crud.remove_project_member(db, user_id, project_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Member not found in this project")
+        
+    return {"message": "Member removed successfully"}
 
 @router.get("/projects/{project_id}/assignees", tags=["Members"])
 def get_project_assignees(

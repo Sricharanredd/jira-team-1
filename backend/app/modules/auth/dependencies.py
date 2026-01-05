@@ -39,7 +39,10 @@ def require_role(roles: list[models.RoleType]):
     We need project_id from the request.
     """
     def dependency(project_id: int, db: Session = Depends(get_db), user: models.User = Depends(get_current_user)):
-        user_role = crud.get_user_role(db, user.id, project_id)
+        if user.global_role == models.GlobalRole.ADMIN:
+            user_role = models.RoleType.ADMIN
+        else:
+            user_role = crud.get_user_role(db, user.id, project_id)
         
         # If no role assigned, deny access
         if not user_role:
@@ -59,6 +62,8 @@ def get_current_user_role(project_id: int, db: Session, user: models.User):
      """
      Helper to get role for logic, requires explicit user object now.
      """
+     if user.global_role == models.GlobalRole.ADMIN:
+         return models.RoleType.ADMIN
      return crud.get_user_role(db, user.id, project_id)
 
 class Permissions:
