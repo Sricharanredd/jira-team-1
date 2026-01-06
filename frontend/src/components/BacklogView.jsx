@@ -18,7 +18,7 @@ const BacklogView = () => {
         canChangeStatus
     } = useProject();
 
-    const [expandedEpics, setExpandedEpics] = useState({});
+
 
     // Safe derivation
     const canEdit = canChangeStatus;
@@ -33,18 +33,34 @@ const BacklogView = () => {
 
     const handleMoveToBoard = async (task) => {
         try {
-            await updateUserStoryStatus(task.id, 'todo');
+            if (task.sprint_number) {
+                await updateUserStoryStatus(task.id, 'todo');
+            } else {
+                // Prompt user for Sprint Number
+                const sprintInput = window.prompt("Enter Sprint Number for this issue:", "1");
+
+                if (!sprintInput) return; // Cancelled
+
+                // If missing sprint, fetch full details and assign provided sprint
+                const { data: fullStory } = await api.get(`/user-story/${task.id}`);
+                const data = new FormData();
+                data.append('title', fullStory.title);
+                data.append('assignee', fullStory.assignee || '');
+                data.append('reviewer', fullStory.reviewer || '');
+                data.append('description', fullStory.description || '');
+                data.append('status', 'todo');
+                data.append('sprint_number', sprintInput);
+                data.append('start_date', fullStory.start_date || '');
+                data.append('end_date', fullStory.end_date || '');
+                data.append('parent_issue_id', fullStory.parent_issue_id || '');
+
+                await api.put(`/user-story/${task.id}`, data);
+            }
             refreshIssues();
         } catch (error) {
+            console.error(error);
             alert(error.response?.data?.detail || "Failed to move to board");
         }
-    };
-
-    const toggleEpic = (epicId) => {
-        setExpandedEpics(prev => ({
-            ...prev,
-            [epicId]: !prev[epicId]
-        }));
     };
 
     if (loading && tasks.length === 0) return <div className="p-10 text-center text-gray-500">Loading backlog...</div>;
@@ -53,7 +69,6 @@ const BacklogView = () => {
         <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
                 <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-10"></th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/2">Title</th>
@@ -64,104 +79,42 @@ const BacklogView = () => {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
                 {issues.map(task => (
-                    <React.Fragment key={task.id}>
-                        <tr className="hover:bg-gray-50 transition-colors">
-                            <td className="px-6 py-4 whitespace-nowrap text-right">
-                                {task.issue_type === 'epic' && (
-                                    <button
-                                        onClick={() => toggleEpic(task.id)}
-                                        className="text-gray-400 hover:text-gray-600 transition-colors"
-                                    >
-                                        <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 transform transition-transform ${expandedEpics[task.id] ? 'rotate-90' : ''}`} viewBox="0 0 20 20" fill="currentColor">
-                                            <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                                        </svg>
-                                    </button>
-                                )}
+                    <tr key={task.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-500">
+                            <Link to={`/projects/${projectId}/issues/${task.id}?context=backlog`} className="hover:text-blue-600">
+                                {task.story_code || `ID-${task.id}`}
+                            </Link>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase border ${task.issue_type === 'epic' ? 'bg-purple-50 text-purple-600 border-purple-200' : task.issue_type === 'bug' ? 'bg-red-50 text-red-600 border-red-200' : task.issue_type === 'task' ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-green-50 text-green-600 border-green-200'}`}>
+                                {task.issue_type || 'story'}
+                            </span>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-900 font-medium">
+                            <Link to={`/projects/${projectId}/issues/${task.id}?context=backlog`} className="hover:text-blue-600 hover:underline">
+                                {task.title}
+                            </Link>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {task.assignee}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-500">
+                            {task.status.replace('_', ' ')}
+                        </td>
+                        {showMoveAction && canEdit && (
+                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                <button
+                                    onClick={() => handleMoveToBoard(task)}
+                                    className="text-white bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded-md text-xs transition-colors"
+                                >
+                                    Move to Board
+                                </button>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-500">
-                                {task.issue_type === 'epic' ? (
-                                    <button
-                                        onClick={() => toggleEpic(task.id)}
-                                        className="hover:text-blue-600 hover:underline text-left"
-                                    >
-                                        {task.story_code || `ID-${task.id}`}
-                                    </button>
-                                ) : (
-                                    <Link to={`/projects/${projectId}/issues/${task.id}?context=backlog`} className="hover:text-blue-600">
-                                        {task.story_code || `ID-${task.id}`}
-                                    </Link>
-                                )}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase border ${task.issue_type === 'epic' ? 'bg-purple-50 text-purple-600 border-purple-200' : task.issue_type === 'bug' ? 'bg-red-50 text-red-600 border-red-200' : task.issue_type === 'task' ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-green-50 text-green-600 border-green-200'}`}>
-                                    {task.issue_type || 'story'}
-                                </span>
-                            </td>
-                            <td className="px-6 py-4 text-sm text-gray-900 font-medium">
-                                {task.issue_type === 'epic' ? (
-                                    <button
-                                        onClick={() => toggleEpic(task.id)}
-                                        className="hover:text-blue-600 hover:underline text-left font-medium"
-                                    >
-                                        {task.title}
-                                    </button>
-                                ) : (
-                                    <Link to={`/projects/${projectId}/issues/${task.id}?context=backlog`} className="hover:text-blue-600 hover:underline">
-                                        {task.title}
-                                    </Link>
-                                )}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                {task.assignee}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-500">
-                                {task.status.replace('_', ' ')}
-                            </td>
-                            {showMoveAction && canEdit && (
-                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                    <button
-                                        onClick={() => handleMoveToBoard(task)}
-                                        className="text-white bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded-md text-xs transition-colors"
-                                    >
-                                        Move to Board
-                                    </button>
-                                </td>
-                            )}
-                        </tr>
-                        {/* Expandable Child Row */}
-                        {task.issue_type === 'epic' && expandedEpics[task.id] && (
-                            <tr className="bg-gray-50/50">
-                                <td colSpan={7} className="px-6 py-4 pl-16">
-                                    <div className="bg-white rounded-lg border border-gray-100 shadow-sm p-4">
-                                        <h4 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center gap-2">
-                                            <span>Child Issues</span>
-                                            <span className="text-gray-400 font-normal">({tasks.filter(t => String(t.parent_issue_id) === String(task.id)).length})</span>
-                                        </h4>
-                                        <div className="space-y-2">
-                                            {tasks.filter(t => String(t.parent_issue_id) === String(task.id)).length > 0 ? (
-                                                tasks.filter(t => String(t.parent_issue_id) === String(task.id)).map(child => (
-                                                    <div key={child.id} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded border border-transparent hover:border-gray-100 transition-colors">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className={`w-1.5 h-1.5 rounded-full ${child.status === 'done' ? 'bg-green-500' : 'bg-blue-500'}`}></div>
-                                                            <Link to={`/projects/${projectId}/issues/${child.id}?context=backlog`} className="text-sm text-gray-700 font-medium hover:text-blue-600">
-                                                                {child.story_code} - {child.title}
-                                                            </Link>
-                                                        </div>
-                                                        <span className="text-xs text-gray-500 px-2 py-0.5 bg-gray-100 rounded">{child.status}</span>
-                                                    </div>
-                                                ))
-                                            ) : (
-                                                <div className="text-sm text-gray-400 italic">No child stories found.</div>
-                                            )}
-                                        </div>
-                                    </div>
-                                </td>
-                            </tr>
                         )}
-                    </React.Fragment>
+                    </tr>
                 ))}
             </tbody>
-        </table>
+        </table >
     );
 
     return (

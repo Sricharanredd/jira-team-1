@@ -41,6 +41,7 @@ const StoryDetailPage = () => {
         attachments: false,
         activity: false,
         people: false,
+        timeline: false,
         dates: false
     });
 
@@ -227,7 +228,7 @@ const StoryDetailPage = () => {
 
                     {/* Right: Status Workflow Buttons */}
                     <div className="flex items-center gap-1">
-                        {['todo', 'in_progress', 'done'].map((status) => (
+                        {['todo', 'in_progress', 'testing', 'done'].map((status) => (
                             <button
                                 key={status}
                                 className={`px-3 py-1.5 text-xs font-semibold uppercase border rounded-[3px] transition-colors ${story.status === status
@@ -455,6 +456,30 @@ const StoryDetailPage = () => {
                                             </div>
                                             <span className="text-sm text-[#0052CC] hover:underline cursor-pointer">{story.reviewer || 'Reporter'}</span>
                                         </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Timeline Panel */}
+                        <div>
+                            <div
+                                className="flex items-center justify-between mb-3 cursor-pointer select-none"
+                                onClick={() => toggleSection('timeline')}
+                            >
+                                <h4 className="text-xs font-semibold text-[#5E6C84] uppercase tracking-wide">Timeline</h4>
+                                <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 text-[#5E6C84] transition-transform ${collapsedSections.timeline ? '-rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                            </div>
+
+                            {!collapsedSections.timeline && (
+                                <div className="space-y-3">
+                                    <div className="flex items-center">
+                                        <span className="w-24 text-sm text-[#5E6C84]">Start Date:</span>
+                                        <span className="text-sm text-[#172B4D]">{story.start_date ? new Date(story.start_date).toLocaleDateString() : 'None'}</span>
+                                    </div>
+                                    <div className="flex items-center">
+                                        <span className="w-24 text-sm text-[#5E6C84]">End Date:</span>
+                                        <span className="text-sm text-[#172B4D]">{story.end_date ? new Date(story.end_date).toLocaleDateString() : 'None'}</span>
                                     </div>
                                 </div>
                             )}
