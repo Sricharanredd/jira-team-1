@@ -1,10 +1,11 @@
 import axios from 'axios';
 
+// Create axios instance with base URL for all API calls
 const api = axios.create({
   baseURL: '/api',
 });
 
-// Add Auth Interceptor
+// Request interceptor: Automatically attach JWT token to all outgoing requests for authentication
 api.interceptors.request.use(config => {
   const token = localStorage.getItem('token');
   if (token) {
@@ -15,7 +16,7 @@ api.interceptors.request.use(config => {
   return Promise.reject(error);
 });
 
-// Add Response Interceptor
+// Response interceptor: Handle 401 unauthorized errors by redirecting to login page
 api.interceptors.response.use(response => {
   return response;
 }, error => {
@@ -27,8 +28,7 @@ api.interceptors.response.use(response => {
   return Promise.reject(error);
 });
 
-// Helper to handle form data conversion if needed
-// Although simple objects can be sent as form data by iterating
+// Convert JavaScript object to FormData for multipart/form-data requests (file uploads, etc.)
 export const toFormData = (data) => {
   const formData = new FormData();
   Object.keys(data).forEach(key => {
@@ -39,6 +39,7 @@ export const toFormData = (data) => {
   return formData;
 };
 
+// Update issue status via API (used in drag-and-drop board)
 export const updateUserStoryStatus = (id, newStatus) => {
   return api.post(`/user-story/${id}/status`, { new_status: newStatus });
 };

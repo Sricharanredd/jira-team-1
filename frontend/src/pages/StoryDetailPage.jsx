@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../api/api';
 
@@ -11,7 +11,6 @@ const StoryDetailPage = () => {
     const [history, setHistory] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isEditing, setIsEditing] = useState(false);
-
 
 
     const [parentIssues, setParentIssues] = useState([]);
@@ -52,7 +51,7 @@ const StoryDetailPage = () => {
         }));
     };
 
-    const fetchData = async () => {
+    const fetchData = useCallback(async () => {
         try {
             // 1. Fetch Story First
             const storyRes = await api.get(`/user-story/${id}`);
@@ -123,38 +122,41 @@ const StoryDetailPage = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [id]);
 
     useEffect(() => {
         fetchData();
-    }, [id]);
+    }, [fetchData]);
 
     const handleSave = async () => {
         try {
-            const data = new FormData();
-            data.append('title', formData.title);
-            data.append('assignee', formData.assignee);
-            data.append('reviewer', formData.reviewer);
-            data.append('description', formData.description);
-            data.append('status', formData.status);
-            data.append('sprint_number', formData.sprint_number);
-            data.append('start_date', formData.start_date || '');
-            data.append('end_date', formData.end_date || '');
+            // Build updates object with only changed fields
+            const updates = {
+                title: formData.title,
+                assignee: formData.assignee,
+                reviewer: formData.reviewer,
+                description: formData.description,
+                status: formData.status,
+                sprint_number: formData.sprint_number || '',
+                start_date: formData.start_date || null,
+                end_date: formData.end_date || null,
+                parent_issue_id: formData.parent_issue_id || null
+            };
 
-            // Handle Parent Issue
-            // If empty string, send null or empty? API usually expects ID or null.
-            // FormData sends strings. Logic in backend might need check. 
-            // Usually safer to send it if it has value, or handle nullable in backend.
-            if (formData.parent_issue_id) {
-                data.append('parent_issue_id', formData.parent_issue_id);
-            } else {
-                // Explicitly clearing it might require specific backend support (e.g. sending 'null' string or separate field)
-                // For now assuming backend handles empty or we append 'null' if compatible.
-                // Let's try appending empty string, backend should handle.
-                data.append('parent_issue_id', '');
-            }
+            // Remove null/empty values to send only actual updates
+            Object.keys(updates).forEach(key => {
+                if (updates[key] === null || updates[key] === '') {
+                    delete updates[key];
+                }
+            });
 
-            await api.put(`/user-story/${id}`, data);
+            // Send all changes in ONE JSON request (not FormData)
+            await api.put(`/user-story/${id}`, updates, {
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
             await fetchData();
             setIsEditing(false);
             window.dispatchEvent(new Event('story-updated'));
@@ -400,21 +402,26 @@ const StoryDetailPage = () => {
                             {!collapsedSections.activity && (
                                 <div className="space-y-4 pl-4">
                                     {history.map((log) => (
-                                        <div key={log.id} className="flex gap-3">
-                                            <div className="w-8 h-8 rounded-full bg-[#DFE1E6] flex-shrink-0 flex items-center justify-center text-xs font-bold text-[#42526E]">
-                                                {log.user_id ? 'U' : 'S'}
-                                            </div>
-                                            <div className="text-sm">
-                                                <p className="text-[#172B4D]">
-                                                    <span className="font-semibold text-[#0052CC] cursor-pointer">User</span> updated the
-                                                    <span className="font-semibold mx-1">{log.field_name.replace('_', ' ')}</span>
-                                                </p>
-                                                <div className="flex items-center gap-2 mt-0.5">
-                                                    <span className="text-[#5E6C84] text-xs bg-[#F4F5F7] px-1 py-0.5 rounded">{log.old_value || 'None'}</span>
-                                                    <span className="text-[#5E6C84]">→</span>
-                                                    <span className="text-[#172B4D] text-xs font-medium bg-[#E3FCEF] px-1 py-0.5 rounded">{log.new_value || 'None'}</span>
+                                        <div key={log.id} className="border-l-2 border-blue-400 pl-3 py-2">
+                                            <div className="flex items-start gap-3">
+                                                <div className="w-8 h-8 rounded-full bg-[#DFE1E6] flex-shrink-0 flex items-center justify-center text-xs font-bold text-[#42526E]">
+                                                    {log.user_id ? 'U' : 'S'}
                                                 </div>
-                                                <p className="text-xs text-[#5E6C84] mt-0.5">{new Date(log.changed_at).toLocaleString()}</p>
+                                                <div className="flex-1">
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <span className="font-semibold text-[#0052CC]">User</span>
+                                                        <span className="text-[#5E6C84]">•</span>
+                                                        <span className="text-xs text-[#5E6C84]">{new Date(log.created_at).toLocaleString()}</span>
+                                                        <span className="ml-auto text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
+                                                            {log.change_count} {log.change_count === 1 ? 'change' : 'changes'}
+                                                        </span>
+                                                    </div>
+                                                    <div className="bg-gray-50 p-3 rounded mt-2">
+                                                        <pre className="text-sm text-[#172B4D] whitespace-pre-wrap font-sans">
+                                                            {log.changes}
+                                                        </pre>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                     ))}

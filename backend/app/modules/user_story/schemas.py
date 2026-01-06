@@ -53,13 +53,19 @@ class UserStoryUpdateRequest(BaseModel):
 
 
 
-class UserStoryHistoryResponse(BaseModel):
+# -------- ACTIVITY / HISTORY RESPONSES --------
+class UserStoryActivityResponse(BaseModel):
+    """
+    Aggregated activity log response.
+    Represents ONE save action with multiple field changes.
+    """
     id: int
     story_id: int
-    field_name: str
-    old_value: Optional[str]
-    new_value: Optional[str]
-    changed_at: datetime
+    user_id: Optional[int]
+    action: str  # UPDATED, CREATED, STATUS_CHANGED
+    changes: str  # Human-readable text: "Title: old → new\nDescription: old → new"
+    change_count: int  # Number of fields changed
+    created_at: datetime
 
     class Config:
         from_attributes = True

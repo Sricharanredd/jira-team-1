@@ -82,14 +82,14 @@ def get_timeline_data(
         story_models.UserStory.created_at >= start_date
     )
     
-    # 2. Fetch History Events
-    history_query = db.query(story_models.UserStoryHistory).filter(
-         story_models.UserStoryHistory.changed_at >= start_date
+    # 2. Fetch Activity Events (new system)
+    activity_query = db.query(story_models.UserStoryActivity).filter(
+         story_models.UserStoryActivity.created_at >= start_date
     )
 
     # 3. Apply Project Filter / Auth
-    # To filter history by project, we need to join UserStory
-    history_query = history_query.join(story_models.UserStory)
+    # To filter activity by project, we need to join UserStory
+    activity_query = activity_query.join(story_models.UserStory)
 
     if project_id:
         # Check access
@@ -97,15 +97,15 @@ def get_timeline_data(
              raise HTTPException(status_code=403, detail="Access denied")
         
         issue_query = issue_query.filter(story_models.UserStory.project_id == project_id)
-        history_query = history_query.filter(story_models.UserStory.project_id == project_id)
+        activity_query = activity_query.filter(story_models.UserStory.project_id == project_id)
     else:
         # Filter by user's projects
         user_projects = [p.project_id for p in current_user.project_memberships]
         issue_query = issue_query.filter(story_models.UserStory.project_id.in_(user_projects))
-        history_query = history_query.filter(story_models.UserStory.project_id.in_(user_projects))
+        activity_query = activity_query.filter(story_models.UserStory.project_id.in_(user_projects))
 
     issues = issue_query.all()
-    history = history_query.all()
+    activities = activity_query.all()
 
     # 4. Merge and Serialize
     events = []
@@ -123,49 +123,29 @@ def get_timeline_data(
             "description": "Issue created"
         })
         
-    for h in history:
-        # We need story details (code, title) which are reachable via h.story if relationship exists
-        # Model check: UserStoryHistory has 'story_id', but no relationship definition in the simplified model check.
-        # But we joined it? SQL Alchemy Join allows filtering, but accessing properties depends on relationship.
-        # Let's perform a manual lookup or eager I'll assume we queried UserStory in lines 105. 
-        # Actually simplest is to fetch story data. 
-        # Performance warning: N+1. 
-        # For this MVP, I'll rely on lazy loading or explicit join fetch if I had time. 
-        # Let's try accessing the story via query.
-        
-        # NOTE: The UserStoryHistory model I viewed earlier did NOT have a 'story' relationship defined. 
-        # LINE 51: story_id = Column...
-        # So I cannot do h.story.title.
-        # I must fetch the story data manually or join-select.
-        
-        # Optimized: Pre-fetch relevant stories in a dict
-        pass 
-        
-    # Optimization: Get all unique story_ids from history
-    hist_story_ids = {h.story_id for h in history}
-    # We might have issues from the "Created" set, but we also need stories for History items that were created BEFORE start_date
-    missing_ids = hist_story_ids - {i.id for i in issues}
+    # Get all unique story_ids from activities
+    activity_story_ids = {a.story_id for a in activities}
+    # Fetch stories that were created before start_date but have activities in range
+    missing_ids = activity_story_ids - {i.id for i in issues}
     if missing_ids:
-        # Fetch extra stories needed for display
         extra_stories = db.query(story_models.UserStory).filter(story_models.UserStory.id.in_(missing_ids)).all()
-        # Add to a dictionary map
         story_map = {s.id: s for s in issues + extra_stories}
     else:
         story_map = {s.id: s for s in issues}
 
-    for h in history:
-        story = story_map.get(h.story_id)
+    for activity in activities:
+        story = story_map.get(activity.story_id)
         if story:
             events.append({
                 "type": "updated",
-                "timestamp": h.changed_at,
-                "date": h.changed_at.strftime("%Y-%m-%d"),
-                "time": h.changed_at.strftime("%H:%M"),
+                "timestamp": activity.created_at,
+                "date": activity.created_at.strftime("%Y-%m-%d"),
+                "time": activity.created_at.strftime("%H:%M"),
                 "project_id": story.project_id,
                 "issue_id": story.id,
                 "story_code": story.story_code,
                 "title": story.title,
-                "description": f"Updated {h.field_name}: {h.old_value or 'None'} -> {h.new_value or 'None'}"
+                "description": activity.changes  # Human-readable text from new system
             })
 
     # Sort

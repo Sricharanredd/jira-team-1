@@ -4,12 +4,14 @@ import api from '../api/api';
 
 const AuthContext = createContext();
 
+// AuthProvider manages global authentication state and provides login/logout functions to entire app
 export const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
+  // On app load, check if JWT token exists and fetch current user data
   useEffect(() => {
     // Check for token on load
     const token = localStorage.getItem('token');
@@ -20,6 +22,7 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
+  // Fetch logged-in user details from backend using stored JWT token
   const fetchCurrentUser = async () => {
     try {
         const res = await api.get('/auth/me'); // We need to ensure api.js attaches token
@@ -35,6 +38,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Login function: sends credentials to backend, receives JWT token, and stores in localStorage
   const login = async (email, password) => {
       // Form Data for OAuth2
       const formData = new URLSearchParams();
@@ -56,6 +60,7 @@ export const AuthProvider = ({ children }) => {
       return true;
   };
 
+  // Register new user: creates account and automatically logs them in
   const register = async (name, email, password, confirm_password, role) => {
       const res = await api.post('/auth/register', { name, email, password, confirm_password, role });
       const { access_token } = res.data;
@@ -64,6 +69,7 @@ export const AuthProvider = ({ children }) => {
       return true;
   };
 
+  // Logout: clear token from localStorage and reset authentication state
   const logout = () => {
       localStorage.removeItem('token');
       setCurrentUser(null);
