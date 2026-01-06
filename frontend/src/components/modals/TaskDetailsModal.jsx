@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import api, { toFormData } from '../../api/api';
+import api from '../../api/api';
 
 const STATUS_OPTIONS = [
   { value: 'todo', label: 'To Do' },
@@ -54,9 +54,23 @@ const TaskDetailsModal = ({ isOpen, onClose, task, onUpdate, isReadOnly }) => {
     setError(null);
 
     try {
-      const dataToSend = toFormData(formData);
-      // Note: Backend might not support updating all fields, but UI allows editing per req.
-      await api.put(`/user-story/${task.id}`, dataToSend);
+      // Build updates object with only changed fields
+      const updates = { ...formData };
+      
+      // Remove null/empty values to send only actual updates
+      Object.keys(updates).forEach(key => {
+        if (updates[key] === null || updates[key] === '') {
+          delete updates[key];
+        }
+      });
+
+      // Send all changes in ONE JSON request (not FormData)
+      await api.put(`/user-story/${task.id}`, updates, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
       onUpdate();
       setIsEditing(false); // Exit edit mode
     } catch (err) {

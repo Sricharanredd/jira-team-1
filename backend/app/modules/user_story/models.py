@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, UniqueConstraint, JSON
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
@@ -48,15 +48,24 @@ class UserStory(Base):
     )
 
 
-class UserStoryHistory(Base):
-    __tablename__ = "user_story_history"
+class UserStoryActivity(Base):
+    """
+    Aggregated activity log for user story changes.
+    Each record represents ONE save action with multiple field changes.
+    """
+    __tablename__ = "user_story_activity"
 
     id = Column(Integer, primary_key=True, index=True)
-    story_id = Column(Integer, ForeignKey("user_story.id"), nullable=False)
+    story_id = Column(Integer, ForeignKey("user_story.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     
-    field_name = Column(String(50), nullable=False)
-    old_value = Column(Text, nullable=True)
-    new_value = Column(Text, nullable=True)
+    action = Column(String(50), nullable=False, default="UPDATED")  # UPDATED, CREATED, STATUS_CHANGED, etc.
+    changes = Column(Text, nullable=False)  # Human-readable text description of changes
+    change_count = Column(Integer, nullable=False, default=0)  # Number of fields changed
     
-    changed_at = Column(DateTime(timezone=True), server_default=func.now())
-    # changed_by could be added here if we had user auth context
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    
+    # Relationships
+    story = relationship("UserStory", backref="activities")
+    user = relationship("app.modules.auth.models.User")
+

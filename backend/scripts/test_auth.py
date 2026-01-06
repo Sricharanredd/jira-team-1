@@ -1,4 +1,4 @@
-import requests
+import requests  # type: ignore
 import json
 
 BASE_URL = "http://127.0.0.1:8000"
@@ -10,6 +10,7 @@ def test_auth_flow():
         "email": "admin_test_flow@test.com",
         "password": "password123"
     }
+    token = None  # Initialize token variable
     try:
         r = requests.post(f"{BASE_URL}/auth/register", json=reg_payload)
         print(f"Register Status: {r.status_code}")
@@ -31,6 +32,11 @@ def test_auth_flow():
                     return
              else:
                  return
+        
+        # Ensure token was obtained
+        if not token:
+            print("Failed to obtain token")
+            return
 
         # 2. Check /auth/me
         headers = {"Authorization": f"Bearer {token}"}

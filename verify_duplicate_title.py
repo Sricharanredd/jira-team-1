@@ -1,4 +1,4 @@
-import requests
+import requests  # type: ignore
 import time
 
 URL_AUTH = "http://localhost:8000/auth/login"

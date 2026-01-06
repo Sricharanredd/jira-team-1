@@ -1,4 +1,8 @@
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
+from datetime import datetime
+from typing import Dict, Any
+import json
 from . import models, schemas
 from app.modules.project import models as project_models
 
@@ -131,74 +135,210 @@ def create_user_story(db: Session, story: schemas.UserStoryCreate, file_path: st
     db.flush() # Flush to get ID, do not commit yet
     db.refresh(db_story)
     
-    # Initial history log - access instance attribute directly from __dict__ to get scalar value
+    # Initial activity log for creation
     story_id_val: int = db_story.__dict__['id']
-    log_history(db, story_id_val, "status", None, story.status)
     
-    return db_story
-
-def update_user_story_by_id(db: Session, story_id: int, story_update: schemas.UserStoryUpdateRequest):
-    db_story = get_user_story_by_id(db, story_id)
-    if not db_story:
-        return None
+    # Log creation as an activity
+    change_lines = [
+        f"Status: None → {story.status}",
+        f"Title: None → {story.title}"
+    ]
+    changes_text = "\n".join(change_lines)
     
-    update_data = story_update.dict(exclude_unset=True)
-    
-    for key, value in update_data.items():
-        old_value = getattr(db_story, key)
-        # Log if changed
-        if str(old_value) != str(value):
-            log_history(db, story_id, key, str(old_value), str(value))
-        
-        setattr(db_story, key, value)
-
-    db.commit()
-    db.refresh(db_story)
-    return db_story
-
-def update_user_story_status(db: Session, story_id: int, new_status: str):
-    db_story = get_user_story_by_id(db, story_id)
-    if not db_story:
-        return None
-        
-    old_status = db_story.status
-    
-    # RULE: Parent DONE protection
-    if new_status == 'done':
-        # Check if any child is not done
-        # Using relationship 'children'
-        has_open_children = db.query(models.UserStory).filter(
-            models.UserStory.parent_issue_id == story_id, 
-            models.UserStory.status != 'done'
-        ).count() > 0
-        
-        if has_open_children:
-            raise ValueError("Cannot complete parent issue with open children")
-
-    # Get the actual Python string value from old_status
-    old_status_val = getattr(db_story, 'status', None)
-    if old_status_val != new_status:
-        log_history(db, story_id, "status", old_status_val, new_status)
-    
-    # Use SQLAlchemy update to avoid Column type issues
-    db.query(models.UserStory).filter(models.UserStory.id == story_id).update({"status": new_status})
-    db.commit()
-    db.refresh(db_story)
-    return db_story
-
-def log_history(db: Session, story_id: int, field_name: str, old_value: str | None, new_value: str | None):
-    history_entry = models.UserStoryHistory(
-        story_id=story_id,
-        field_name=field_name,
-        old_value=old_value,
-        new_value=new_value
+    activity = models.UserStoryActivity(
+        story_id=story_id_val,
+        user_id=user_id,
+        action="CREATED",
+        changes=changes_text,
+        change_count=2
     )
-    db.add(history_entry)
-    # Note: commit might be handled by caller, but safe to add to session. 
-    # If caller commits, this commits. If caller rolls back, this rolls back.
-    # To be safe and ensure ID generation if needed immediately, we could flush/commit,
-    # but usually part of the same transaction.
-    # We'll let the main update commit finalize this.
+    db.add(activity)
+    
+    return db_story
 
-def get_story_history(db: Session, story_id: int):
-    return db.query(models.UserStoryHistory).filter(models.UserStoryHistory.story_id == story_id).order_by(models.UserStoryHistory.changed_at.desc()).all()
+def update_user_story_by_id(
+    db: Session, 
+    story_id: int, 
+    story_update: schemas.UserStoryUpdateRequest,
+    user_id: int | None = None
+):
+    """
+    Update user story with transaction-based aggregated change logging.
+    All field changes in one save action are logged as ONE activity record.
+    
+    Args:
+        db: Database session
+        story_id: ID of the story to update
+        story_update: Update data with changed fields only
+        user_id: ID of user making the change (for audit trail)
+    
+    Returns:
+        Updated story object or None if not found
+    """
+    try:
+        # Start transaction (autoflush=False ensures we control when DB writes happen)
+        db_story = get_user_story_by_id(db, story_id)
+        if not db_story:
+            return None
+        
+        # Extract update data (only fields that were provided)
+        update_data = story_update.dict(exclude_unset=True)
+        
+        if not update_data:
+            # No changes to apply
+            return db_story
+        
+        # Build changes dictionary for fields that actually changed
+        changes: Dict[str, Dict[str, Any]] = {}
+        change_lines = []
+        
+        for field_name, new_value in update_data.items():
+            old_value = getattr(db_story, field_name)
+            
+            # Convert datetime objects to strings for comparison and JSON serialization
+            if isinstance(old_value, datetime):
+                old_value_str = old_value.isoformat() if old_value else None
+            else:
+                old_value_str = str(old_value) if old_value is not None else None
+                
+            if isinstance(new_value, datetime):
+                new_value_str = new_value.isoformat() if new_value else None
+            else:
+                new_value_str = str(new_value) if new_value is not None else None
+            
+            # Only log if value actually changed
+            if old_value_str != new_value_str:
+                changes[field_name] = {
+                    "old": old_value_str,
+                    "new": new_value_str
+                }
+                # Format as readable text
+                field_display = field_name.replace('_', ' ').title()
+                old_display = old_value_str or 'None'
+                new_display = new_value_str or 'None'
+                change_lines.append(f"{field_display}: {old_display} → {new_display}")
+                
+                # Apply the change to the model
+                setattr(db_story, field_name, new_value)
+        
+        # If no actual changes detected, return without logging
+        if not changes:
+            return db_story
+        
+        # Create readable text from changes
+        changes_text = "\n".join(change_lines)
+        
+        # Create single aggregated activity record
+        activity = models.UserStoryActivity(
+            story_id=story_id,
+            user_id=user_id,
+            action="UPDATED",
+            changes=changes_text,  # Store as formatted text
+            change_count=len(changes)
+        )
+        db.add(activity)
+        
+        # Commit transaction (both story update and activity log)
+        db.commit()
+        db.refresh(db_story)
+        
+        return db_story
+        
+    except SQLAlchemyError as e:
+        # Rollback on any database error
+        db.rollback()
+        print(f"ERROR updating story {story_id}: {str(e)}")
+        raise ValueError(f"Database error during update: {str(e)}")
+    except Exception as e:
+        db.rollback()
+        print(f"UNEXPECTED ERROR updating story {story_id}: {str(e)}")
+        raise
+
+def update_user_story_status(db: Session, story_id: int, new_status: str, user_id: int | None = None):
+    """
+    Update user story status with workflow validation and activity logging.
+    
+    Args:
+        db: Database session
+        story_id: ID of the story to update
+        new_status: New status value
+        user_id: ID of user making the change
+    
+    Returns:
+        Updated story object or None if not found
+    """
+    try:
+        db_story = get_user_story_by_id(db, story_id)
+        if not db_story:
+            return None
+        
+        # Get current status value
+        old_status_value = str(db_story.status)
+        
+        # RULE: Parent DONE protection
+        if new_status == 'done':
+            # Check if any child is not done
+            has_open_children = db.query(models.UserStory).filter(
+                models.UserStory.parent_issue_id == story_id, 
+                models.UserStory.status != 'done'
+            ).count() > 0
+            
+            if has_open_children:
+                raise ValueError("Cannot complete parent issue with open children")
+        
+        # Only update and log if status actually changed
+        if old_status_value != new_status:
+            # Update status using query to avoid type issues
+            db.query(models.UserStory).filter(
+                models.UserStory.id == story_id
+            ).update({"status": new_status})
+            
+            # Create activity record for status change
+            changes_text = f"Status: {old_status_value} → {new_status}"
+            
+            activity = models.UserStoryActivity(
+                story_id=story_id,
+                user_id=user_id,
+                action="STATUS_CHANGED",
+                changes=changes_text,
+                change_count=1
+            )
+            db.add(activity)
+            
+            db.commit()
+            db.refresh(db_story)
+        
+        return db_story
+        
+    except SQLAlchemyError as e:
+        db.rollback()
+        print(f"ERROR updating status for story {story_id}: {str(e)}")
+        raise ValueError(f"Database error during status update: {str(e)}")
+    except Exception as e:
+        db.rollback()
+        raise
+
+def get_story_activity(db: Session, story_id: int):
+    """
+    Get aggregated activity history for a story.
+    Returns activities in reverse chronological order.
+    """
+    return db.query(models.UserStoryActivity)\
+        .filter(models.UserStoryActivity.story_id == story_id)\
+        .order_by(models.UserStoryActivity.created_at.desc())\
+        .all()
+
+
+def delete_user_story_by_id(db: Session, story_id: int):
+    """
+    Delete a user story by ID.
+    Returns True if deleted, False if not found.
+    """
+    db_story = get_user_story_by_id(db, story_id)
+    if not db_story:
+        return False
+    
+    db.delete(db_story)
+    db.commit()
+    return True
+
