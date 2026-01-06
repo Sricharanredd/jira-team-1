@@ -118,8 +118,15 @@ const Board = () => {
   const [typeFilter, setTypeFilter] = useState('');
 
   // Separate Epics and Board Tasks
-  const epics = tasks.filter(t => t.issue_type === 'epic');
+  const rawEpics = tasks.filter(t => t.issue_type === 'epic');
   const boardTasks = tasks.filter(t => t.issue_type !== 'epic'); // Stories, Tasks, Bugs, Subtasks
+
+  const epics = rawEpics.filter(task => {
+    const matchesAssignee = assigneeFilter ? task.assignee === assigneeFilter : true;
+    const matchesSprint = sprintFilter ? task.sprint_number === sprintFilter : true;
+    const matchesType = typeFilter ? task.issue_type === typeFilter : true;
+    return matchesAssignee && matchesSprint && matchesType;
+  });
 
   const filteredBoardTasks = boardTasks.filter(task => {
     // Validation: Must have a Sprint AND not be 'backlog' status
